@@ -99,6 +99,7 @@ public:
     virtual void OnButtonPress() { CursorToggle(); };
     virtual void OnEncoderMove(int direction) = 0;
     virtual void Unload() { }
+    virtual void OnUIExit() { }
     virtual void DrawFullScreen() { View(); }
     virtual void AuxButton() { CancelEdit(); }
 

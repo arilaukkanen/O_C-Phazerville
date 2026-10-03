@@ -273,6 +273,8 @@ public:
 #endif
     }
     void Suspend() {
+        for (int h = 0; h < 2; ++h)
+            HS::available_applets[my_applet[h]].instance[h]->OnUIExit();
 #ifdef __IMXRT1062__
         if (HS::auto_save_enabled)
             StoreToPreset(preset_id);
@@ -1014,6 +1016,8 @@ public:
         if (down) {
             // dual press for Clock Setup... check first_click, so we only process the 2nd button event
             if (event.mask == (OC::CONTROL_BUTTON_A | OC::CONTROL_BUTTON_B) && hemisphere != first_click) {
+                for (int h = 0; h < 2; ++h)
+                  HS::available_applets[my_applet[h]].instance[h]->OnUIExit();
                 clock_setup = 1;
                 SetFullScreen(-1);
                 select_mode = -1;
@@ -1150,6 +1154,8 @@ public:
 
     void ToggleConfigMenu() {
       if (view_state != CONFIG_MENU) {
+        for (int h = 0; h < 2; ++h)
+          HS::available_applets[my_applet[h]].instance[h]->OnUIExit();
         view_state = CONFIG_MENU;
         //SetFullScreen(-1);
       } else {
@@ -1157,12 +1163,16 @@ public:
       }
     }
     void ShowPresetSelector() {
+        for (int h = 0; h < 2; ++h)
+          HS::available_applets[my_applet[h]].instance[h]->OnUIExit();
         view_state = CONFIG_MENU;
         config_cursor = LOAD_PRESET;
         preset_cursor = preset_id + 1;
     }
 
     void SetFullScreen(int hemisphere) {
+        if (hemisphere >= 0)
+          HS::available_applets[my_applet[hemisphere]].instance[hemisphere]->OnUIExit();
         zoom_slot = hemisphere;
         select_mode = -1;
         isEditing = false;

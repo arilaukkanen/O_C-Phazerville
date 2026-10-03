@@ -20,8 +20,6 @@
 
 #define HEM_SHREDDER_ANIMATION_SPEED 500
 #define HEM_SHREDDER_DOUBLE_CLICK_DELAY 5000
-#define HEM_SHREDDER_POS_5V 7680 // 5 * (12 << 7)
-#define HEM_SHREDDER_NEG_3V 4608 // 3 * (12 << 7)
 
 class Shredder : public HemisphereApplet {
 public:
@@ -30,8 +28,9 @@ public:
       QUANT_CHAN,
       QUANT_EDIT,
       RESETSHRED1, RESETSHRED2,
+      WRITE1, WRITE2, UNDO,
 
-      MAX_CURSOR = RESETSHRED2
+      MAX_CURSOR = UNDO
     };
 
     const char* applet_name() {
@@ -40,6 +39,8 @@ public:
     const uint8_t* applet_icon() { return PhzIcons::shredder; }
 
     void Start() {
+        StopWrite();
+        undo_valid = false;
         step = 0;
         replay = 0;
         reset = true;
@@ -51,6 +52,7 @@ public:
     }
 
     void Reset() {
+        StopWrite();
         step = 0; // Reset
         reset = true;
         VoltageOut();
@@ -61,6 +63,7 @@ public:
     }
 
     void Controller() {
+        if (recording_channel >= 0 && !EditMode()) StopWrite();
         if (Clock(1)) {
             Reset();
         }
@@ -75,6 +78,7 @@ public:
                 if (x > 3) x = 3;
                 if (y > 3) y = 3;
                 step = (y * 4) + x;
+                CommitWrite();
                 VoltageOut();
             } else {
                 if (!reset) {
@@ -82,6 +86,7 @@ public:
                 }
                 reset = false;
                 if (step > 15) step = 0;
+                CommitWrite();
                 VoltageOut();
             }
             replay = 0;
@@ -99,19 +104,28 @@ public:
 
     void View() {
         DrawParams();
-        DrawMeters();
         DrawGrid();
     }
 
     void AuxButton() {
+      if (recording_channel >= 0) {
+        StopWrite();
+        return;
+      }
       if (cursor < 2) {
         Shred(cursor, true);
       }
+      else if (cursor == UNDO)
+        UndoWrite();
       else
         CancelEdit();
     }
 
     void OnButtonPress() {
+      if (recording_channel >= 0) {
+        StopWrite();
+        return;
+      }
       switch (cursor) {
         case CHAN1_RANGE:
         case CHAN2_RANGE:
@@ -131,10 +145,29 @@ public:
         case RESETSHRED2:
           shred_on_reset[cursor - RESETSHRED1] = !shred_on_reset[cursor - RESETSHRED1];
           break;
+
+        case WRITE1:
+        case WRITE2:
+          StartWrite(cursor - WRITE1);
+          break;
+
+        case UNDO:
+          UndoWrite();
+          break;
       }
     }
 
     void OnEncoderMove(int direction) {
+        if (recording_channel >= 0) {
+            const int ch = recording_channel;
+            const int limit = range[ch] * (12 << 7);
+            const int minimum = bipolar[ch] ? -limit : 0;
+            noInterrupts();
+            held_voltage = constrain((int)held_voltage + direction * 154, minimum, limit);
+            interrupts();
+            VoltageOut();
+            return;
+        }
         if (!EditMode()) {
             MoveCursor(cursor, direction, MAX_CURSOR);
             return;
@@ -181,6 +214,8 @@ public:
     }
 
     void OnDataReceive(uint64_t data) {
+        StopWrite();
+        undo_valid = false;
         range[0] = Unpack(data, PackLocation {0,4}); // only 4 bits used for range
         bipolar[0] = Unpack(data, PackLocation {4,1}); 
         shred_on_reset[0] = Unpack(data, PackLocation {5,1});
@@ -197,6 +232,9 @@ public:
         VoltageOut();
     }
 
+    void Unload() { StopWrite(); }
+    void OnUIExit() { StopWrite(); }
+
 protected:
     void SetHelp() {
         //                    "-------" <-- Label size guide
@@ -207,7 +245,7 @@ protected:
         help[HELP_OUT1]     = "Ch 1";
         help[HELP_OUT2]     = "Ch 2";
         help[HELP_EXTRA1] = "";
-        help[HELP_EXTRA2] = "AuxButton to Shred";
+        help[HELP_EXTRA2] = "Aux: Shred/Stop";
         //                  "---------------------" <-- Extra text size guide
     }
 
@@ -215,6 +253,11 @@ private:
     int cursor;
     uint32_t click_tick = 0;
     uint16_t seed[2] = {0,0};
+    int8_t recording_channel = -1;
+    int16_t held_voltage = 0;
+    int16_t undo_steps[16];
+    int8_t undo_channel = -1;
+    bool undo_valid = false;
 
     // Sequencer state
     uint8_t step; // Current step number
@@ -258,41 +301,45 @@ private:
           gfxIcon(1 + 32*(cursor-RESETSHRED1), 8, DOWN_BTN_ICON);
         }
 
-        // quantize channel selection
-        gfxIcon(32, 25, SCALE_ICON);
-        if (quant_channels == 0) {
-          outlabel[0] = 'A'+io_offset;
-          outlabel[1] = '+';
-          outlabel[2] = 'B'+io_offset;
-          gfxPrint(42, 25, outlabel);
+        if (recording_channel >= 0) {
+          gfxPrint(33, 25, "REC ");
+          gfxPrint(OutputLabel(recording_channel));
+          const int tenths = (abs(held_voltage) * (NorthernLightModular ? 12 : 10) + 768) / 1536;
+          gfxPos(33, 35);
+          gfxPrint(held_voltage < 0 ? "-" : "+");
+          gfxPrint(tenths / 10);
+          gfxPrint(".");
+          gfxPrint(tenths % 10);
+          gfxPrint("V");
         } else {
-          gfxPrint(48, 25, OutputLabel(quant_channels - 1));
-        }
-        if (QUANT_CHAN == cursor) gfxCursor(42, 33, 20);
+          // quantize channel selection
+          gfxIcon(32, 25, SCALE_ICON);
+          if (quant_channels == 0) {
+            outlabel[0] = 'A'+io_offset;
+            outlabel[1] = '+';
+            outlabel[2] = 'B'+io_offset;
+            gfxPrint(42, 25, outlabel);
+          } else {
+            gfxPrint(48, 25, OutputLabel(quant_channels - 1));
+          }
+          if (QUANT_CHAN == cursor) gfxCursor(42, 33, 20);
 
-        // quantize scale selection
-        gfxPrint(32, 35, OC::scale_names_short[GetScale(0)]);
-        if (QUANT_EDIT == cursor) gfxCursor(32, 43, 30);
+          // quantize scale selection
+          gfxPrint(32, 35, OC::scale_names_short[GetScale(0)]);
+          if (QUANT_EDIT == cursor) gfxCursor(32, 43, 30);
+        }
+
+        gfxPrint(33, 47, "W");
+        gfxPrint(OutputLabel(0));
+        gfxPrint(49, 47, "W");
+        gfxPrint(OutputLabel(1));
+        if (WRITE1 == cursor) gfxCursor(33, 54, 12);
+        if (WRITE2 == cursor) gfxCursor(49, 54, 12);
+        gfxPrint(34, 56, "UNDO");
+        if (UNDO == cursor) gfxCursor(34, 63, 24);
 
     }
 
-    void DrawMeters() {
-      ForEachChannel(ch) {
-        int o = ch * 10; // offset
-        gfxLine(34, 47+o, 62, 47+o); // top line
-        gfxLine(34, 50+o, 62, 50+o); // bottom line
-        gfxLine(44, 45+o, 44, 52+o); // zero line
-        // 10 pixels for neg, 18 pixels for pos
-        if (current[ch] > 0) {
-          int w = Proportion(current[ch], HEM_SHREDDER_POS_5V, 18);
-          gfxRect(45, 48+o, w, 2);
-        } else {
-          int w = Proportion(-current[ch], HEM_SHREDDER_NEG_3V, 10);
-          gfxRect(44-w, 48+o, w, 2);
-        }
-      }
-    }
-    
     void DrawGrid() {
         // Draw the Cartesian plane
         for (int s = 0; s < 16; s++) gfxFrame(1 + (8 * (s % 4)), 26 + (8 * (s / 4)), 5, 5);
@@ -315,6 +362,8 @@ private:
     }
 
     void Shred(int ch, bool reseed) {
+        StopWrite();
+        undo_valid = false;
         int max;
         int min;
         if (reseed) {
@@ -340,10 +389,45 @@ private:
 
     void VoltageOut() {
         ForEachChannel(ch) {
-            current[ch] = sequence[ch][step];
+            current[ch] = ch == recording_channel ? held_voltage : sequence[ch][step];
             int8_t qc = quant_channels - 1; 
             if (qc < 0 || qc == ch) current[ch] = Quantize(0, current[ch]);
             Out(ch, current[ch]);
         }
+    }
+
+    void StartWrite(int ch) {
+        noInterrupts();
+        undo_channel = ch;
+        for (int i = 0; i < 16; ++i) undo_steps[i] = sequence[ch][i];
+        undo_valid = true;
+        const int limit = range[ch] * (12 << 7);
+        held_voltage = constrain(sequence[ch][step], bipolar[ch] ? -limit : 0, limit);
+        if (!EditMode()) CursorToggle();
+        recording_channel = ch;
+        interrupts();
+        VoltageOut();
+    }
+
+    void StopWrite() {
+        if (recording_channel < 0) return;
+        recording_channel = -1;
+        CancelEdit();
+        VoltageOut();
+    }
+
+    void CommitWrite() {
+        if (recording_channel >= 0) sequence[recording_channel][step] = held_voltage;
+    }
+
+    void UndoWrite() {
+        noInterrupts();
+        const bool restore = undo_valid && recording_channel < 0;
+        if (restore) {
+            for (int i = 0; i < 16; ++i) sequence[undo_channel][i] = undo_steps[i];
+            undo_valid = false;
+        }
+        interrupts();
+        if (restore) VoltageOut();
     }
 };
