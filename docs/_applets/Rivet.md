@@ -11,8 +11,8 @@ Rivet is a three-oscillator, BIA-inspired percussion voice for standard Teensy 3
 | --- | --- |
 | Trigger 1 | Normal hit |
 | Trigger 2 | Accented hit (takes precedence if both arrive together) |
-| CV 1 | Continuous pitch, approximately 1 V/oct, clamped at extreme pitches |
-| CV 2 | Bipolar timbre macro: Metal, Fold and Noise together |
+| CV 1 | Assignable modulation; default is continuous pitch at approximately 1 V/oct |
+| CV 2 | Assignable modulation; default is Timbre (Metal, Fold and Noise together) |
 | Output 1 | Bipolar audio, limited to about ±2 V |
 | Output 2 | Unipolar envelope, 0–5 V |
 
@@ -20,7 +20,7 @@ The logical inputs follow Hemisphere's current Input Mapping. On the left half, 
 
 ### Controls
 
-Turn the encoder to select a parameter. Press to edit; turn to change its 0–63 value; press again to leave editing. **LPF** controls the low-pass filter after the wavefolder: low values make darker, rounder hits; high values let more metallic brightness through. After LPF, turn once more to **RANDOM** and press to randomize the other seven sound parameters. LPF stays at its chosen value. The new sound is heard on the next hit and can still be edited normally. The list scrolls when selecting LPF or RANDOM.
+Turn the encoder to select a parameter. Press to edit; turn to change its value; press again to leave editing. **LPF** controls the low-pass filter after the wavefolder: low values make darker, rounder hits; high values let more metallic brightness through. **CV1** and **CV2** independently select what the two mapped CV inputs control. After CV2, select **RANDOM** and press to randomize the seven voice parameters. LPF and both CV assignments stay at their chosen values. The list scrolls to show the selected item.
 
 | Parameter | Effect |
 | --- | --- |
@@ -32,6 +32,10 @@ Turn the encoder to select a parameter. Press to edit; turn to change its 0–63
 | Noise | Level and length of the noisy attack |
 | Sweep | Fast pitch-envelope amount |
 | LPF | Post-fold low-pass cutoff, dark to bright; 20 matches the earlier fixed filter |
+
+Each CV input can be set to **Off**, **1V/oct**, **Timbre**, **Metal**, **Fold**, **Noise**, **Decay**, **Spread**, **Sweep**, or **LPF**. Timbre moves Metal, Fold and Noise level together; the single-parameter options target only the named control. The CV value adds to the panel setting and clips at its valid range. You can assign both inputs to the same target, in which case their modulation adds. 1V/oct tracks pitch continuously (subject to the engine's pitch limits); positive CV raises the other targets and negative CV lowers them. Decay and Noise burst length update on the next hit, while the other timbres respond during a hit. LPF's knob remains its base cutoff even when CV modulates it.
+
+Useful pairs include **1V/oct + Timbre** (default), **1V/oct + Fold** for pitched distortion, **1V/oct + Decay** for pitched short/long hits, **Metal + Fold** for metallic sweeps, and **Noise + Sweep** for attacks and zaps. Older Rivet presets load with the default 1V/oct + Timbre assignments.
 
 Settings are stored with the Hemisphere preset. The active voice is monophonic: a new trigger fades the previous audio over about 1 ms, then restarts the hit. An accent raises the new hit's output level by 25%; simultaneous triggers produce one accented hit. CV changes are read about once per millisecond. The final envelope starts with a short ramp to reduce clicks.
 

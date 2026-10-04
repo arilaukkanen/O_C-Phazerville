@@ -8,6 +8,10 @@ class RivetDSP {
 public:
     static constexpr uint32_t kRate = 16666;
     static constexpr int kMax = 63;
+    enum CVTarget : uint8_t {
+        CV_OFF, CV_PITCH, CV_TIMBRE, CV_METAL, CV_FOLD,
+        CV_NOISE, CV_DECAY, CV_SPREAD, CV_SWEEP, CV_LPF, CV_TARGET_COUNT
+    };
     struct Settings {
         uint8_t pitch = 20, decay = 35, spread = 26, metal = 24;
         uint8_t fold = 20, noise = 14, sweep = 28, cutoff = 20;
@@ -26,27 +30,50 @@ public:
         fade_ = attack_ = 0;
     }
 
-    void SetCV(int pitch_cv, int timbre_cv) {
-        // CV units are 128 per semitone. One volt is 1,536 units.
-        if (pitch_cv < -3072) pitch_cv = -3072;
-        if (pitch_cv > 6144) pitch_cv = 6144;
-        if (timbre_cv < -6144) timbre_cv = -6144;
-        if (timbre_cv > 6144) timbre_cv = 6144;
-        pitch_cv_ = pitch_cv;
-        timbre_cv_ = timbre_cv;
+    void SetModes(uint8_t cv1, uint8_t cv2) {
+        cv_mode_[0] = cv1 < CV_TARGET_COUNT ? cv1 : CV_OFF;
+        cv_mode_[1] = cv2 < CV_TARGET_COUNT ? cv2 : CV_OFF;
     }
 
-    // CV2 is a bipolar Metal/Fold/Noise macro. Call at ADC/control rate.
+    void SetCV(int cv1, int cv2) {
+        // CV units are 128 per semitone. One volt is 1,536 units.
+        cv_[0] = clamp(cv1, -6144, 6144);
+        cv_[1] = clamp(cv2, -6144, 6144);
+    }
+
+    // Assignments are additive; both CVs may address the same destination.
+    // Call this at ADC/control rate, never from the audio sample path.
     void UpdateControls() {
-        int macro = timbre_cv_ / 48;
-        metal_ = clamp(settings.metal * 4 + macro, 0, 252);
-        fold_ = clamp(settings.fold * 4 + macro, 0, 252);
-        noise_ = clamp(settings.noise * 4 + macro / 2, 0, 252);
+        int pitch_cv = 0, macro = 0, metal_cv = 0, fold_cv = 0;
+        int noise_cv = 0, decay_cv = 0, spread_cv = 0, sweep_cv = 0, lpf_cv = 0;
+        for (int i = 0; i < 2; ++i) {
+            const int cv = cv_[i];
+            switch (cv_mode_[i]) {
+            case CV_PITCH: pitch_cv += cv; break;
+            case CV_TIMBRE: macro += cv / 48; break;
+            case CV_METAL: metal_cv += cv / 48; break;
+            case CV_FOLD: fold_cv += cv / 48; break;
+            case CV_NOISE: noise_cv += cv / 48; break;
+            case CV_DECAY: decay_cv += cv / 96; break;
+            case CV_SPREAD: spread_cv += cv / 96; break;
+            case CV_SWEEP: sweep_cv += cv / 96; break;
+            case CV_LPF: lpf_cv += cv / 96; break;
+            default: break;
+            }
+        }
+        pitch_cv = clamp(pitch_cv, -3072, 6144);
+        metal_ = clamp(settings.metal * 4 + macro + metal_cv, 0, 252);
+        fold_ = clamp(settings.fold * 4 + macro + fold_cv, 0, 252);
+        noise_ = clamp(settings.noise * 4 + macro / 2 + noise_cv, 0, 252);
+        noise_length_ = clamp(settings.noise + noise_cv / 4, 0, 63);
+        decay_ = clamp(settings.decay + decay_cv, 0, 63);
+        spread_ = clamp(settings.spread + spread_cv, 0, 63);
+        sweep_ = clamp(settings.sweep + sweep_cv, 0, 63);
         // 20 preserves the original one-pole coefficient of 64/256.
-        filter_coeff_ = 4 + settings.cutoff * 3;
+        filter_coeff_ = 4 + clamp(settings.cutoff + lpf_cv, 0, 63) * 3;
 
         // Linear interpolation within an octave gives continuous 1 V/oct.
-        int cv = pitch_cv_;
+        int cv = pitch_cv;
         int oct = cv / 1536;
         int rem = cv % 1536;
         if (rem < 0) { rem += 1536; --oct; }
@@ -64,8 +91,8 @@ public:
         base_inc_ = increment;
 
         // 1.0x .. 2.4x; cap every partial below 4 kHz (Nyquist is 8.3 kHz).
-        uint32_t ratio2 = 64 + settings.spread;
-        uint32_t ratio3 = 64 + 2 * settings.spread;
+        uint32_t ratio2 = 64 + spread_;
+        uint32_t ratio3 = 64 + 2 * spread_;
         inc_[0] = base_inc_;
         inc_[1] = ((uint64_t)base_inc_ * ratio2) >> 6;
         inc_[2] = ((uint64_t)base_inc_ * ratio3) >> 6;
@@ -92,7 +119,7 @@ public:
             return 0;
         }
 
-        uint32_t extra = ((uint64_t)inc_[0] * settings.sweep * pitch_env_) >> 21;
+        uint32_t extra = ((uint64_t)inc_[0] * sweep_ * pitch_env_) >> 21;
         phase_[0] += inc_[0] + extra;
         phase_[1] += inc_[1] + extra / 2;
         phase_[2] += inc_[2] + extra / 3;
@@ -190,13 +217,13 @@ private:
         attack_ = 16;
         for (int i = 0; i < 3; ++i) env_[i] = 32767;
         noise_env_ = pitch_env_ = 32767;
-        int ms = 35 + settings.decay * 15;
+        int ms = 35 + decay_ * 15;
         master_step_ = step_for_ms(ms);
         env_step_[0] = step_for_ms(ms);
         env_step_[1] = step_for_ms(ms * 2 / 3);
         env_step_[2] = step_for_ms(ms / 2);
-        noise_step_ = step_for_ms(8 + settings.noise * 2);
-        pitch_step_ = step_for_ms(12 + settings.sweep);
+        noise_step_ = step_for_ms(8 + noise_length_ * 2);
+        pitch_step_ = step_for_ms(12 + sweep_);
     }
 
     int32_t master_ = 0, env_[3] = {}, noise_env_ = 0, pitch_env_ = 0;
@@ -205,8 +232,10 @@ private:
     uint32_t rng_ = 0x8fe642a1;
     int32_t noise_lp_ = 0, filter_ = 0;
     int32_t last_audio_ = 0, last_env_ = 0;
-    int pitch_cv_ = 0, timbre_cv_ = 0;
+    int cv_[2] = {};
+    uint8_t cv_mode_[2] = {CV_PITCH, CV_TIMBRE};
     int metal_ = 0, fold_ = 0, noise_ = 0, filter_coeff_ = 64;
+    int decay_ = 35, spread_ = 26, sweep_ = 28, noise_length_ = 14;
     uint8_t fade_ = 0, attack_ = 0;
     bool pending_accent_ = false, accent_ = false;
 };

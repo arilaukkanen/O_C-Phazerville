@@ -77,6 +77,42 @@ static void pitch_tracking() {
     uint32_t octave = dsp.BaseIncrement();
     assert(octave > 2 * root - root / 1000);
     assert(octave < 2 * root + root / 1000);
+
+    dsp.SetModes(RivetDSP::CV_OFF, RivetDSP::CV_PITCH);
+    dsp.SetCV(0, 0); dsp.UpdateControls();
+    root = dsp.BaseIncrement();
+    dsp.SetCV(0, 1536); dsp.UpdateControls();
+    octave = dsp.BaseIncrement();
+    assert(octave > 2 * root - root / 1000);
+    assert(octave < 2 * root + root / 1000);
+
+    dsp.SetModes(RivetDSP::CV_PITCH, RivetDSP::CV_PITCH);
+    dsp.SetCV(768, 768); dsp.UpdateControls();
+    assert(dsp.BaseIncrement() > 2 * root - root / 1000);
+}
+
+static void cv_assignments() {
+    for (int target = RivetDSP::CV_OFF;
+         target < RivetDSP::CV_TARGET_COUNT; ++target) {
+        RivetDSP plain, modulated;
+        plain.SetModes(RivetDSP::CV_OFF, target);
+        modulated.SetModes(RivetDSP::CV_OFF, target);
+        plain.SetCV(0, 0);
+        modulated.SetCV(0, 3072);
+        plain.UpdateControls();
+        modulated.UpdateControls();
+        plain.Trigger(false);
+        modulated.Trigger(false);
+        uint64_t difference = 0;
+        for (int i = 0; i < 3000; ++i) {
+            int env1, env2;
+            int a = plain.Render(env1);
+            int b = modulated.Render(env2);
+            difference += abs(a - b) + abs(env1 - env2);
+        }
+        if (target == RivetDSP::CV_OFF) assert(difference == 0);
+        else assert(difference > 0);
+    }
 }
 
 static void low_pass_range() {
@@ -142,13 +178,15 @@ static void randomize_control() {
     applet.OnButtonPress();
     const uint64_t original = applet.OnDataRequest();
     assert(Unpack(original, PackLocation{42, 6}) == 47);
-    applet.OnEncoderMove(1); // RANDOM follows LPF
+    applet.OnEncoderMove(3); // RANDOM follows LPF, CV1 and CV2
     applet.View();
     applet.OnButtonPress();
     assert(!applet.editing);
     const uint64_t randomized = applet.OnDataRequest();
     assert(randomized != original);
     assert(Unpack(randomized, PackLocation{42, 6}) == 47);
+    assert(Unpack(randomized, PackLocation{48, 4}) == RivetDSP::CV_PITCH);
+    assert(Unpack(randomized, PackLocation{52, 4}) == RivetDSP::CV_TIMBRE);
     for (int i = 0; i < 8; ++i)
         assert(Unpack(randomized, PackLocation{i * 6, 6}) <= 63);
     Rivet restored;
@@ -157,17 +195,53 @@ static void randomize_control() {
     assert(restored.OnDataRequest() == randomized);
     restored.OnDataReceive(randomized & ((uint64_t(1) << 42) - 1));
     assert(Unpack(restored.OnDataRequest(), PackLocation{42, 6}) == 20);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{48, 4}) == RivetDSP::CV_PITCH);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{52, 4}) == RivetDSP::CV_TIMBRE);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{62, 1}) == 1);
     assert(Unpack(restored.OnDataRequest(), PackLocation{63, 1}) == 1);
     applet.OnButtonPress();
     assert(applet.OnDataRequest() != randomized);
     assert(Unpack(applet.OnDataRequest(), PackLocation{42, 6}) == 47);
 }
 
+static void cv_mode_persistence() {
+    Rivet applet;
+    applet.Start();
+    applet.OnEncoderMove(8); // CV1
+    applet.OnButtonPress();
+    applet.OnEncoderMove(3); // Pitch -> Fold
+    applet.OnButtonPress();
+    applet.OnEncoderMove(1); // CV2
+    applet.OnButtonPress();
+    applet.OnEncoderMove(4); // Timbre -> Decay
+    applet.OnButtonPress();
+    const uint64_t saved = applet.OnDataRequest();
+    assert(Unpack(saved, PackLocation{48, 4}) == RivetDSP::CV_FOLD);
+    assert(Unpack(saved, PackLocation{52, 4}) == RivetDSP::CV_DECAY);
+    Rivet restored;
+    restored.Start();
+    restored.OnDataReceive(saved);
+    assert(restored.OnDataRequest() == saved);
+    applet.OnEncoderMove(1); // RANDOM after CV2
+    applet.OnButtonPress();
+    assert(Unpack(applet.OnDataRequest(), PackLocation{48, 4}) == RivetDSP::CV_FOLD);
+    assert(Unpack(applet.OnDataRequest(), PackLocation{52, 4}) == RivetDSP::CV_DECAY);
+    // Prior preset format has no assignment marker and restores defaults.
+    uint64_t old_preset = saved & ~(uint64_t(1) << 62);
+    old_preset = (old_preset & ~(uint64_t(63) << 42)) | (uint64_t(47) << 42);
+    restored.OnDataReceive(old_preset);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{48, 4}) == RivetDSP::CV_PITCH);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{52, 4}) == RivetDSP::CV_TIMBRE);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{42, 6}) == 47);
+}
+
 int main() {
     bounds_and_decay();
     pitch_tracking();
+    cv_assignments();
     low_pass_range();
     retrigger_and_persistence();
     randomize_control();
+    cv_mode_persistence();
     std::puts("Rivet DSP and applet tests passed");
 }
