@@ -33,6 +33,8 @@ if "USB_MTPDISK" in defines:
     extras += "+MTP"
 if "VOR" in defines:
     extras += "+VOR"
+if "T32_NIGHTWIRE" in defines:
+    extras += "+nightwire"
 if "FLIP_180" in defines:
     extras += "_flipped"
 

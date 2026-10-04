@@ -143,10 +143,10 @@ private:
 
   UI::Button buttons_[CONTROL_BUTTON_LAST];
   uint32_t button_press_time_[CONTROL_BUTTON_LAST];
-  uint16_t button_state_;
+  volatile uint16_t button_state_; // Polled in the UI loop, read by clocked applets.
   uint16_t button_ignore_mask_;
   bool screensaver_;
-  bool preempt_screensaver_;
+  volatile bool preempt_screensaver_;
   bool jump_to_menu_;
 
   /* Reverse the left and right encoders if Hemisphere Suite is installed on the left-hand

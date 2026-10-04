@@ -27,10 +27,10 @@ public:
       CHAN1_RANGE, CHAN2_RANGE,
       QUANT_CHAN,
       QUANT_EDIT,
-      RESETSHRED1, RESETSHRED2,
       WRITE1, WRITE2, UNDO,
+      RESETSHRED1, RESETSHRED2,
 
-      MAX_CURSOR = UNDO
+      MAX_CURSOR = RESETSHRED2
     };
 
     const char* applet_name() {
@@ -66,6 +66,11 @@ public:
         if (recording_channel >= 0 && !EditMode()) StopWrite();
         if (Clock(1)) {
             Reset();
+        }
+        const bool gate_held = WriteGateHeld();
+        if (gate_held != write_gate_was_held) {
+            write_gate_was_held = gate_held;
+            VoltageOut();
         }
 
         if (Clock(0)) {
@@ -108,10 +113,7 @@ public:
     }
 
     void AuxButton() {
-      if (recording_channel >= 0) {
-        StopWrite();
-        return;
-      }
+      if (recording_channel >= 0) return;
       if (cursor < 2) {
         Shred(cursor, true);
       }
@@ -159,11 +161,20 @@ public:
 
     void OnEncoderMove(int direction) {
         if (recording_channel >= 0) {
+            if (!WriteGateHeld()) return;
             const int ch = recording_channel;
             const int limit = range[ch] * (12 << 7);
             const int minimum = bipolar[ch] ? -limit : 0;
+            const int increment = (limit - minimum) / 24;
+            const int variation = increment / 4;
+            const int nominal = constrain((int)nominal_voltage + direction * increment, minimum, limit);
+            int voltage = nominal;
+            // Keep endpoints exact; vary interior detents by at most 25% of a step.
+            if (direction && nominal > minimum && nominal < limit)
+                voltage += random(-variation, variation + 1);
             noInterrupts();
-            held_voltage = constrain((int)held_voltage + direction * 154, minimum, limit);
+            nominal_voltage = nominal;
+            held_voltage = voltage;
             interrupts();
             VoltageOut();
             return;
@@ -234,6 +245,7 @@ public:
 
     void Unload() { StopWrite(); }
     void OnUIExit() { StopWrite(); }
+    bool IsWriteGateArmed() { return recording_channel >= 0; }
 
 protected:
     void SetHelp() {
@@ -245,7 +257,7 @@ protected:
         help[HELP_OUT1]     = "Ch 1";
         help[HELP_OUT2]     = "Ch 2";
         help[HELP_EXTRA1] = "";
-        help[HELP_EXTRA2] = "Aux: Shred/Stop";
+        help[HELP_EXTRA2] = "Hold Aux: WRITE";
         //                  "---------------------" <-- Extra text size guide
     }
 
@@ -254,6 +266,8 @@ private:
     uint32_t click_tick = 0;
     uint16_t seed[2] = {0,0};
     int8_t recording_channel = -1;
+    bool write_gate_was_held = false;
+    int16_t nominal_voltage = 0;
     int16_t held_voltage = 0;
     int16_t undo_steps[16];
     int8_t undo_channel = -1;
@@ -297,12 +311,12 @@ private:
         }
         if (CHAN2_RANGE == cursor) gfxSpicyCursor(45, 23, 12);
 
-        if (cursor >= RESETSHRED1) {
+        if (cursor >= RESETSHRED1 && cursor <= RESETSHRED2) {
           gfxIcon(1 + 32*(cursor-RESETSHRED1), 8, DOWN_BTN_ICON);
         }
 
         if (recording_channel >= 0) {
-          gfxPrint(33, 25, "REC ");
+          gfxPrint(33, 25, WriteGateHeld() ? "REC " : "ARM ");
           gfxPrint(OutputLabel(recording_channel));
           const int tenths = (abs(held_voltage) * (NorthernLightModular ? 12 : 10) + 768) / 1536;
           gfxPos(33, 35);
@@ -389,7 +403,7 @@ private:
 
     void VoltageOut() {
         ForEachChannel(ch) {
-            current[ch] = ch == recording_channel ? held_voltage : sequence[ch][step];
+            current[ch] = ch == recording_channel && WriteGateHeld() ? held_voltage : sequence[ch][step];
             int8_t qc = quant_channels - 1; 
             if (qc < 0 || qc == ch) current[ch] = Quantize(0, current[ch]);
             Out(ch, current[ch]);
@@ -402,9 +416,13 @@ private:
         for (int i = 0; i < 16; ++i) undo_steps[i] = sequence[ch][i];
         undo_valid = true;
         const int limit = range[ch] * (12 << 7);
-        held_voltage = constrain(sequence[ch][step], bipolar[ch] ? -limit : 0, limit);
+        nominal_voltage = constrain(sequence[ch][step], bipolar[ch] ? -limit : 0, limit);
+        held_voltage = nominal_voltage;
         if (!EditMode()) CursorToggle();
         recording_channel = ch;
+        write_gate_was_held = WriteGateHeld();
+        // Holding UP is the left hemisphere's write gate, not a screensaver gesture.
+        if (io_offset == 0) OC::ui._preemptScreensaver(true);
         interrupts();
         VoltageOut();
     }
@@ -412,12 +430,19 @@ private:
     void StopWrite() {
         if (recording_channel < 0) return;
         recording_channel = -1;
+        write_gate_was_held = false;
+        if (io_offset == 0) OC::ui._preemptScreensaver(false);
         CancelEdit();
         VoltageOut();
     }
 
     void CommitWrite() {
-        if (recording_channel >= 0) sequence[recording_channel][step] = held_voltage;
+        if (WriteGateHeld()) sequence[recording_channel][step] = held_voltage;
+    }
+
+    bool WriteGateHeld() {
+        return recording_channel >= 0 && OC::ui.read_immediate(
+            io_offset == 0 ? OC::CONTROL_BUTTON_A : OC::CONTROL_BUTTON_B);
     }
 
     void UndoWrite() {

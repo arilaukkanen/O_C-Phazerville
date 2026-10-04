@@ -999,6 +999,12 @@ public:
         bool down = (event.type == UI::EVENT_BUTTON_DOWN);
         const int hemisphere = (event.control == OC::CONTROL_BUTTON_A) ? LEFT_HEMISPHERE : RIGHT_HEMISPHERE;
 
+        if (view_state == APPLETS && zoom_slot < 0 && !clock_setup) {
+            const int index = my_applet[hemisphere];
+            if (HS::available_applets[index].instance[hemisphere]->IsWriteGateArmed())
+                return; // This side button gates Shredder WRITE while armed.
+        }
+
         if (!down && (preset_cursor || view_state != APPLETS)) {
             // cancel preset select, or config screen on select button release
             preset_cursor = 0;
@@ -1235,7 +1241,11 @@ public:
             break;
 
         case UI::EVENT_BUTTON_LONG_PRESS:
-            if (event.control == OC::CONTROL_BUTTON_B) ToggleConfigMenu();
+            if (event.control == OC::CONTROL_BUTTON_B) {
+                const int index = my_applet[RIGHT_HEMISPHERE];
+                if (!HS::available_applets[index].instance[RIGHT_HEMISPHERE]->IsWriteGateArmed())
+                    ToggleConfigMenu();
+            }
             break;
 
         case UI::EVENT_BUTTON_LONG_RELEASE:

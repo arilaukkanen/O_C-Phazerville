@@ -16,7 +16,14 @@ void randomSeed(unsigned long) {}
 unsigned long micros() { return 1; }
 void noInterrupts() {}
 void interrupts() {}
-long random(long low, long high) { return low + (high - low) / 2; }
+long random(long low, long high) {
+    if (low < 0 && high == 1 - low) {
+        static bool alternate = false;
+        alternate = !alternate;
+        return alternate ? low : high - 1;
+    }
+    return low + (high - low) / 2;
+}
 
 struct PackLocation { int offset, width; };
 void Pack(uint64_t &data, PackLocation p, int value) {
@@ -28,6 +35,13 @@ int Unpack(uint64_t data, PackLocation p) {
 
 namespace OC {
 namespace CORE { uint32_t ticks = 100000; }
+enum { CONTROL_BUTTON_A = 1, CONTROL_BUTTON_B = 2 };
+struct FakeUi {
+    int buttons = 0;
+    bool screensaver_preempted = false;
+    bool read_immediate(int button) { return buttons & button; }
+    void _preemptScreensaver(bool value) { screensaver_preempted = value; }
+} ui;
 const char *scale_names_short[] = {"TEST"};
 }
 namespace HS {
@@ -89,8 +103,22 @@ static void tick(Shredder &s, bool reset = false) {
 
 int main() {
     Shredder left, right;
+    right.io_offset = 2;
     left.Start();
     right.Start();
+    left.cursor = Shredder::QUANT_EDIT;
+    left.OnEncoderMove(1);
+    assert(left.cursor == Shredder::WRITE1);
+    left.OnEncoderMove(1);
+    assert(left.cursor == Shredder::WRITE2);
+    left.OnEncoderMove(1);
+    assert(left.cursor == Shredder::UNDO);
+    left.OnEncoderMove(1);
+    assert(left.cursor == Shredder::RESETSHRED1);
+    left.OnEncoderMove(1);
+    assert(left.cursor == Shredder::RESETSHRED2);
+    left.OnEncoderMove(1);
+    assert(left.cursor == Shredder::RESETSHRED2);
     left.range[0] = right.range[0] = 5;
     left.range[1] = right.range[1] = 5;
     for (int i = 0; i < 16; ++i) {
@@ -101,21 +129,36 @@ int main() {
     left.cursor = Shredder::WRITE1;
     left.OnButtonPress();
     assert(left.recording_channel == 0 && left.held_voltage == 0);
+    assert(OC::ui.screensaver_preempted);
     assert(left.sequence[0][0] == 0);
     left.OnEncoderMove(10);
-    assert(left.outputs[0] == 1540 && left.sequence[0][0] == 0);
+    tick(left); // Armed without the side button: playback only.
+    assert(left.sequence[0][0] == 0 && left.held_voltage == 0);
+    OC::ui.buttons |= OC::CONTROL_BUTTON_A;
+    left.OnEncoderMove(10);
+    assert(left.nominal_voltage == 3200 && abs(left.held_voltage - 3200) <= 80);
+    assert(left.outputs[0] == left.held_voltage && left.sequence[0][0] == 0);
     tick(left);
-    assert(left.sequence[0][0] == 1540 && left.step == 0);
+    assert(left.sequence[0][1] == left.held_voltage && left.step == 1);
     tick(left);
-    assert(left.sequence[0][1] == 1540 && left.sequence[1][1] == 2001);
-    left.OnEncoderMove(100);
+    assert(left.sequence[0][2] == left.held_voltage && left.sequence[1][2] == 2002);
+    OC::ui.buttons &= ~OC::CONTROL_BUTTON_A;
+    tick(left); // Releasing the side button pauses writes without disarming.
+    assert(left.recording_channel == 0 && left.sequence[0][3] == 300);
+    assert(left.outputs[0] == 300);
+    OC::ui.buttons |= OC::CONTROL_BUTTON_A;
+    left.OnEncoderMove(14);
     assert(left.held_voltage == 7680 && left.outputs[0] == 7680);
+    left.OnEncoderMove(1);
+    assert(left.held_voltage == 7680);
     for (int i = 0; i < 17; ++i) tick(left);
-    assert(left.step == 2 && left.sequence[0][2] == 7680);
-    left.OnEncoderMove(-100);
+    assert(left.step == 4 && left.sequence[0][4] == 7680);
+    left.OnEncoderMove(-24);
     assert(left.held_voltage == 0);
     left.OnButtonPress();
     assert(left.recording_channel == -1 && !left.editing);
+    assert(!OC::ui.screensaver_preempted);
+    OC::ui.buttons &= ~OC::CONTROL_BUTTON_A;
     assert(left.outputs[0] == left.sequence[0][left.step]);
     left.cursor = Shredder::UNDO;
     const int playhead = left.step;
@@ -128,25 +171,30 @@ int main() {
     left.cursor = Shredder::WRITE1;
     left.OnButtonPress();
     left.OnEncoderMove(3);
-    assert(left.sequence[0][2] == 200); // No clock, only a preview.
+    assert(left.held_voltage == left.sequence[0][left.step]); // Button up: no voltage edit.
+    OC::ui.buttons |= OC::CONTROL_BUTTON_A;
+    left.OnEncoderMove(3);
+    assert(left.sequence[0][left.step] != left.held_voltage); // No clock, only a preview.
     left.inputs[0] = HEMISPHERE_MAX_INPUT_CV;
     left.inputs[1] = HEMISPHERE_MAX_INPUT_CV;
     tick(left);
     assert(left.step == 15 && left.sequence[0][15] == left.held_voltage);
     left.Unload();
     assert(left.recording_channel == -1 && !left.editing);
+    OC::ui.buttons &= ~OC::CONTROL_BUTTON_A;
     left.inputs[0] = left.inputs[1] = 0;
 
     right.cursor = Shredder::WRITE1;
     right.OnButtonPress();
+    OC::ui.buttons |= OC::CONTROL_BUTTON_B;
     right.OnEncoderMove(5);
     tick(right);
     assert(right.recording_channel == 0 && left.recording_channel == -1);
-    assert(right.sequence[0][0] == 3000 + 5 * 154);
+    assert(abs(right.sequence[0][0] - (3000 + 5 * 320)) <= 80);
     right.OnEncoderMove(1);
     tick(right, true);
     assert(right.recording_channel == -1 && right.step == 0);
-    assert(right.sequence[0][0] == 3000 + 5 * 154);
+    assert(abs(right.sequence[0][0] - (3000 + 5 * 320)) <= 80);
     assert(right.sequence[0][1] == 3001); // Coincident reset never writes.
 
     right.shred_on_reset[0] = true;
@@ -162,11 +210,14 @@ int main() {
     assert(right.recording_channel == -1);
     right.OnDataReceive(right.OnDataRequest());
     assert(!right.undo_valid && right.recording_channel == -1);
+    OC::ui.buttons &= ~OC::CONTROL_BUTTON_B;
 
     left.cursor = Shredder::WRITE1;
     right.cursor = Shredder::WRITE2;
     left.OnButtonPress();
     right.OnButtonPress();
+    OC::ui.buttons |= OC::CONTROL_BUTTON_A | OC::CONTROL_BUTTON_B;
+
     left.OnEncoderMove(2);
     right.OnEncoderMove(4);
     tick(left);
@@ -175,4 +226,53 @@ int main() {
     assert(left.sequence[0][left.step] != right.sequence[1][right.step]);
     left.OnButtonPress();
     right.OnButtonPress();
+    OC::ui.buttons = 0;
+
+    Shredder sweep;
+    sweep.Start();
+    for (int is_bipolar = 0; is_bipolar <= 1; ++is_bipolar) {
+        for (int volts = 1; volts <= (is_bipolar ? 3 : 5); ++volts) {
+            const int maximum = volts * 1536;
+            const int minimum = is_bipolar ? -maximum : 0;
+            sweep.range[0] = volts;
+            sweep.bipolar[0] = is_bipolar;
+            sweep.sequence[0][sweep.step] = minimum;
+            sweep.cursor = Shredder::WRITE1;
+            sweep.OnButtonPress();
+            OC::ui.buttons |= OC::CONTROL_BUTTON_A;
+            sweep.OnEncoderMove(1);
+            const int increment = (maximum - minimum) / 24;
+            assert(sweep.nominal_voltage == minimum + increment);
+            assert(abs(sweep.held_voltage - sweep.nominal_voltage) == increment / 4);
+            for (int i = 1; i < 24; ++i) sweep.OnEncoderMove(1);
+            assert(sweep.held_voltage == maximum);
+            sweep.OnEncoderMove(1);
+            assert(sweep.held_voltage == maximum);
+            for (int i = 0; i < 24; ++i) sweep.OnEncoderMove(-1);
+            assert(sweep.held_voltage == minimum);
+            sweep.OnButtonPress();
+            OC::ui.buttons &= ~OC::CONTROL_BUTTON_A;
+        }
+    }
+
+    Shredder variation;
+    variation.Start();
+    variation.range[0] = 5;
+    variation.sequence[0][variation.step] = 0;
+    variation.cursor = Shredder::WRITE1;
+    variation.OnButtonPress();
+    OC::ui.buttons |= OC::CONTROL_BUTTON_A;
+    variation.OnEncoderMove(1);
+    const int first_voltage = variation.held_voltage;
+    tick(variation);
+    assert(variation.sequence[0][0] == first_voltage); // Clock holds the chosen value.
+    variation.OnEncoderMove(-1);
+    assert(variation.held_voltage == 0);
+    variation.OnEncoderMove(1);
+    assert(variation.nominal_voltage == 320);
+    assert(abs(first_voltage - 320) == 80);
+    assert(abs(variation.held_voltage - 320) == 80);
+    assert(variation.held_voltage != first_voltage); // Same detent can yield another value.
+    variation.OnButtonPress();
+    OC::ui.buttons &= ~OC::CONTROL_BUTTON_A;
 }

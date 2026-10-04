@@ -100,6 +100,7 @@ public:
     virtual void OnEncoderMove(int direction) = 0;
     virtual void Unload() { }
     virtual void OnUIExit() { }
+    virtual bool IsWriteGateArmed() { return false; }
     virtual void DrawFullScreen() { View(); }
     virtual void AuxButton() { CancelEdit(); }
 

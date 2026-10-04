@@ -198,6 +198,9 @@ AppletRegistry reg{
     DeclareApplet<Slew>{19, 0x01},
     DeclareApplet<Voltage>{43, 0x10},
     DeclareApplet<Xfader>{33, 0x10},
+#ifdef T32_NIGHTWIRE
+    DeclareApplet<TrigSeq16>{25, 0x06},
+#endif
 #else
 #ifdef APPLETS_SEQUENCING
     DeclareApplet<ASR>{47, 0x09},
