@@ -279,11 +279,11 @@ static void cv_mode_persistence() {
     applet.Start();
     applet.OnEncoderMove(8); // CV1
     applet.OnButtonPress();
-    applet.OnEncoderMove(3); // Pitch -> Fold
+    applet.OnEncoderMove(9); // Pitch -> Fold, past the new macros
     applet.OnButtonPress();
     applet.OnEncoderMove(1); // CV2
     applet.OnButtonPress();
-    applet.OnEncoderMove(4); // Timbre -> Decay
+    applet.OnEncoderMove(10); // Timbre -> Decay
     applet.OnButtonPress();
     const uint64_t saved = applet.OnDataRequest();
     assert(Unpack(saved, PackLocation{48, 5}) == RivetDSP::CV_FOLD);
@@ -308,7 +308,7 @@ static void cv_mode_persistence() {
     paired.Start();
     paired.OnEncoderMove(8); // CV1
     paired.OnButtonPress();
-    paired.OnEncoderMove(14); // Pitch -> F+LPF, highest old-format mode
+    paired.OnEncoderMove(20); // Pitch -> F+LPF, highest old-format mode
     paired.OnButtonPress();
     const uint64_t paired_saved = paired.OnDataRequest();
     assert(Unpack(paired_saved, PackLocation{48, 5}) == RivetDSP::CV_FOLD_LPF);
@@ -324,12 +324,44 @@ static void cv_mode_persistence() {
     assert(Unpack(restored.OnDataRequest(), PackLocation{53, 5}) == RivetDSP::CV_LPF);
 
     paired.OnButtonPress(); // edit CV1 again
-    paired.OnEncoderMove(RivetDSP::CV_BODY - RivetDSP::CV_FOLD_LPF);
+    paired.OnEncoderMove(-13); // F+LPF -> Body in menu order
     paired.OnButtonPress();
     const uint64_t macro_saved = paired.OnDataRequest();
     assert(Unpack(macro_saved, PackLocation{48, 5}) == RivetDSP::CV_BODY);
     restored.OnDataReceive(macro_saved);
     assert(restored.OnDataRequest() == macro_saved);
+}
+
+static void cv_menu_order() {
+    const int expected[] = {
+        RivetDSP::CV_OFF, RivetDSP::CV_PITCH, RivetDSP::CV_TIMBRE,
+        RivetDSP::CV_ATTACK, RivetDSP::CV_IMPACT, RivetDSP::CV_RATTLE,
+        RivetDSP::CV_CRUNCH, RivetDSP::CV_AIR, RivetDSP::CV_BODY,
+        RivetDSP::CV_METAL, RivetDSP::CV_FOLD, RivetDSP::CV_NOISE,
+        RivetDSP::CV_DECAY, RivetDSP::CV_SPREAD, RivetDSP::CV_SWEEP,
+        RivetDSP::CV_LPF, RivetDSP::CV_METAL_FOLD, RivetDSP::CV_FOLD_NOISE,
+        RivetDSP::CV_NOISE_DECAY, RivetDSP::CV_DECAY_SWEEP,
+        RivetDSP::CV_SPREAD_METAL, RivetDSP::CV_FOLD_LPF
+    };
+    Rivet applet;
+    applet.Start();
+    applet.OnEncoderMove(8); // CV1 defaults to 1V/oct
+    applet.OnButtonPress();
+    applet.OnEncoderMove(-1);
+    assert(Unpack(applet.OnDataRequest(), PackLocation{48, 5}) == expected[0]);
+    for (int i = 1; i < RivetDSP::CV_TARGET_COUNT; ++i) {
+        applet.OnEncoderMove(1);
+        assert(Unpack(applet.OnDataRequest(), PackLocation{48, 5}) == expected[i]);
+    }
+    applet.OnEncoderMove(1); // endpoint does not wrap
+    assert(Unpack(applet.OnDataRequest(), PackLocation{48, 5}) == expected[21]);
+    applet.OnEncoderMove(-19); // F+LPF -> Timbre
+    assert(Unpack(applet.OnDataRequest(), PackLocation{48, 5}) == RivetDSP::CV_TIMBRE);
+    applet.OnButtonPress();
+    applet.OnEncoderMove(1); // CV2 defaults to Timbre
+    applet.OnButtonPress();
+    applet.OnEncoderMove(1);
+    assert(Unpack(applet.OnDataRequest(), PackLocation{53, 5}) == RivetDSP::CV_ATTACK);
 }
 
 int main() {
@@ -342,5 +374,6 @@ int main() {
     retrigger_and_persistence();
     randomize_control();
     cv_mode_persistence();
+    cv_menu_order();
     std::puts("Rivet DSP and applet tests passed");
 }

@@ -33,7 +33,7 @@ Turn the encoder to select a parameter. Press to edit; turn to change its value;
 | Sweep | Fast pitch-envelope amount |
 | LPF | Post-fold low-pass cutoff, dark to bright; 20 matches the earlier fixed filter |
 
-Each CV input can be set independently to **Off**, **1V/oct**, a named macro, a paired combination, or a single parameter. **1V/oct** tracks pitch continuously (subject to the engine's pitch limits). The existing **Timbre** macro moves Metal, Fold and Noise together; Noise receives half the modulation depth and its burst length stays fixed. The new macros offer broader three-parameter movements:
+Each CV input can be set independently. Turning the encoder cycles through **Off**, **1V/oct**, **Timbre**, then the six three-control macros below, followed by the individual controls and paired options. **1V/oct** tracks pitch continuously (subject to the engine's pitch limits). **Timbre** moves Metal, Fold and Noise together; Noise receives half the modulation depth and its burst length stays fixed. The newer macros offer broader three-parameter movements:
 
 | On screen | CV controls | Suggested use |
 | --- | --- | --- |

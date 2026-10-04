@@ -68,8 +68,24 @@ public:
         if (cursor_ == 10) return;
         if (cursor_ >= 8) {
             uint8_t &mode = cv_mode_[cursor_ - 8];
-            mode = constrain((int)mode + direction, 0,
-                             (int)RivetDSP::CV_TARGET_COUNT - 1);
+            // Menu order differs from stable preset/DSP IDs. Keep old saves intact.
+            static const uint8_t menu_order[RivetDSP::CV_TARGET_COUNT] = {
+                RivetDSP::CV_OFF, RivetDSP::CV_PITCH, RivetDSP::CV_TIMBRE,
+                RivetDSP::CV_ATTACK, RivetDSP::CV_IMPACT, RivetDSP::CV_RATTLE,
+                RivetDSP::CV_CRUNCH, RivetDSP::CV_AIR, RivetDSP::CV_BODY,
+                RivetDSP::CV_METAL, RivetDSP::CV_FOLD, RivetDSP::CV_NOISE,
+                RivetDSP::CV_DECAY, RivetDSP::CV_SPREAD, RivetDSP::CV_SWEEP,
+                RivetDSP::CV_LPF, RivetDSP::CV_METAL_FOLD,
+                RivetDSP::CV_FOLD_NOISE, RivetDSP::CV_NOISE_DECAY,
+                RivetDSP::CV_DECAY_SWEEP, RivetDSP::CV_SPREAD_METAL,
+                RivetDSP::CV_FOLD_LPF
+            };
+            int position = 0;
+            while (position < RivetDSP::CV_TARGET_COUNT && menu_order[position] != mode)
+                ++position;
+            position = constrain(position + direction, 0,
+                                 (int)RivetDSP::CV_TARGET_COUNT - 1);
+            mode = menu_order[position];
             dsp_.SetModes(cv_mode_[0], cv_mode_[1]);
             dsp_.UpdateControls();
             return;
