@@ -115,6 +115,36 @@ static void cv_assignments() {
     }
 }
 
+static void paired_cv_assignments() {
+    struct Pair { int combo, first, second; };
+    const Pair pairs[] = {
+        {RivetDSP::CV_METAL_FOLD, RivetDSP::CV_METAL, RivetDSP::CV_FOLD},
+        {RivetDSP::CV_FOLD_NOISE, RivetDSP::CV_FOLD, RivetDSP::CV_NOISE},
+        {RivetDSP::CV_NOISE_DECAY, RivetDSP::CV_NOISE, RivetDSP::CV_DECAY},
+        {RivetDSP::CV_DECAY_SWEEP, RivetDSP::CV_DECAY, RivetDSP::CV_SWEEP},
+        {RivetDSP::CV_SPREAD_METAL, RivetDSP::CV_SPREAD, RivetDSP::CV_METAL},
+        {RivetDSP::CV_FOLD_LPF, RivetDSP::CV_FOLD, RivetDSP::CV_LPF},
+    };
+    for (const Pair &pair : pairs) {
+        for (int cv : {-1536, 3072}) {
+            RivetDSP combined, independent;
+            combined.SetModes(pair.combo, RivetDSP::CV_OFF);
+            independent.SetModes(pair.first, pair.second);
+            combined.SetCV(cv, 0);
+            independent.SetCV(cv, cv);
+            combined.UpdateControls();
+            independent.UpdateControls();
+            combined.Trigger(false);
+            independent.Trigger(false);
+            for (int i = 0; i < 4000; ++i) {
+                int combined_env, independent_env;
+                assert(combined.Render(combined_env) == independent.Render(independent_env));
+                assert(combined_env == independent_env);
+            }
+        }
+    }
+}
+
 static void low_pass_range() {
     uint64_t energy[2] = {};
     for (int mode = 0; mode < 2; ++mode) {
@@ -233,12 +263,24 @@ static void cv_mode_persistence() {
     assert(Unpack(restored.OnDataRequest(), PackLocation{48, 4}) == RivetDSP::CV_PITCH);
     assert(Unpack(restored.OnDataRequest(), PackLocation{52, 4}) == RivetDSP::CV_TIMBRE);
     assert(Unpack(restored.OnDataRequest(), PackLocation{42, 6}) == 47);
+
+    Rivet paired;
+    paired.Start();
+    paired.OnEncoderMove(8); // CV1
+    paired.OnButtonPress();
+    paired.OnEncoderMove(14); // Pitch -> F+LPF, highest 4-bit mode
+    paired.OnButtonPress();
+    const uint64_t paired_saved = paired.OnDataRequest();
+    assert(Unpack(paired_saved, PackLocation{48, 4}) == RivetDSP::CV_FOLD_LPF);
+    restored.OnDataReceive(paired_saved);
+    assert(restored.OnDataRequest() == paired_saved);
 }
 
 int main() {
     bounds_and_decay();
     pitch_tracking();
     cv_assignments();
+    paired_cv_assignments();
     low_pass_range();
     retrigger_and_persistence();
     randomize_control();

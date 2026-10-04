@@ -33,7 +33,18 @@ Turn the encoder to select a parameter. Press to edit; turn to change its value;
 | Sweep | Fast pitch-envelope amount |
 | LPF | Post-fold low-pass cutoff, dark to bright; 20 matches the earlier fixed filter |
 
-Each CV input can be set to **Off**, **1V/oct**, **Timbre**, **Metal**, **Fold**, **Noise**, **Decay**, **Spread**, **Sweep**, or **LPF**. Timbre moves Metal, Fold and Noise level together; the single-parameter options target only the named control. The CV value adds to the panel setting and clips at its valid range. You can assign both inputs to the same target, in which case their modulation adds. 1V/oct tracks pitch continuously (subject to the engine's pitch limits); positive CV raises the other targets and negative CV lowers them. Decay and Noise burst length update on the next hit, while the other timbres respond during a hit. LPF's knob remains its base cutoff even when CV modulates it.
+Each CV input can be set to **Off**, **1V/oct**, **Timbre**, **Metal**, **Fold**, **Noise**, **Decay**, **Spread**, **Sweep**, or **LPF**. Timbre is the original Metal+Fold+Noise level macro, with Noise receiving half the modulation depth. The single-parameter options target only the named control. The CV value adds to the panel setting and clips at its valid range. You can assign both inputs to the same target, in which case their modulation adds. 1V/oct tracks pitch continuously (subject to the engine's pitch limits); positive CV raises the other targets and negative CV lowers them. Decay and Noise burst length update on the next hit, while the other timbres respond during a hit. LPF's knob remains its base cutoff even when CV modulates it.
+
+The paired options give one CV several destinations at once, using the same modulation depths as the individual options:
+
+| On screen | CV controls |
+| --- | --- |
+| M+F | Metal + Fold |
+| F+N | Fold + Noise |
+| N+D | Noise + Decay |
+| D+Sw | Decay + Sweep |
+| Sp+M | Spread + Metal |
+| F+LPF | Fold + LPF |
 
 Useful pairs include **1V/oct + Timbre** (default), **1V/oct + Fold** for pitched distortion, **1V/oct + Decay** for pitched short/long hits, **Metal + Fold** for metallic sweeps, and **Noise + Sweep** for attacks and zaps. Older Rivet presets load with the default 1V/oct + Timbre assignments.
 

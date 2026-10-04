@@ -10,8 +10,11 @@ public:
     static constexpr int kMax = 63;
     enum CVTarget : uint8_t {
         CV_OFF, CV_PITCH, CV_TIMBRE, CV_METAL, CV_FOLD,
-        CV_NOISE, CV_DECAY, CV_SPREAD, CV_SWEEP, CV_LPF, CV_TARGET_COUNT
+        CV_NOISE, CV_DECAY, CV_SPREAD, CV_SWEEP, CV_LPF,
+        CV_METAL_FOLD, CV_FOLD_NOISE, CV_NOISE_DECAY,
+        CV_DECAY_SWEEP, CV_SPREAD_METAL, CV_FOLD_LPF, CV_TARGET_COUNT
     };
+    static_assert(CV_TARGET_COUNT <= 16, "CV target must fit preset's 4-bit field");
     struct Settings {
         uint8_t pitch = 20, decay = 35, spread = 26, metal = 24;
         uint8_t fold = 20, noise = 14, sweep = 28, cutoff = 20;
@@ -58,6 +61,18 @@ public:
             case CV_SPREAD: spread_cv += cv / 96; break;
             case CV_SWEEP: sweep_cv += cv / 96; break;
             case CV_LPF: lpf_cv += cv / 96; break;
+            case CV_METAL_FOLD:
+                metal_cv += cv / 48; fold_cv += cv / 48; break;
+            case CV_FOLD_NOISE:
+                fold_cv += cv / 48; noise_cv += cv / 48; break;
+            case CV_NOISE_DECAY:
+                noise_cv += cv / 48; decay_cv += cv / 96; break;
+            case CV_DECAY_SWEEP:
+                decay_cv += cv / 96; sweep_cv += cv / 96; break;
+            case CV_SPREAD_METAL:
+                spread_cv += cv / 96; metal_cv += cv / 48; break;
+            case CV_FOLD_LPF:
+                fold_cv += cv / 48; lpf_cv += cv / 96; break;
             default: break;
             }
         }

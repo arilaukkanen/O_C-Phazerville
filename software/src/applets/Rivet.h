@@ -124,7 +124,8 @@ private:
     static const char* mode_name(uint8_t mode) {
         static const char* names[RivetDSP::CV_TARGET_COUNT] = {
             "Off", "1V/oct", "Timbre", "Metal", "Fold",
-            "Noise", "Decay", "Spread", "Sweep", "LPF"
+            "Noise", "Decay", "Spread", "Sweep", "LPF",
+            "M+F", "F+N", "N+D", "D+Sw", "Sp+M", "F+LPF"
         };
         return names[mode < RivetDSP::CV_TARGET_COUNT ? mode : 0];
     }
