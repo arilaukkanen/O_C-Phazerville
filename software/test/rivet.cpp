@@ -145,6 +145,45 @@ static void paired_cv_assignments() {
     }
 }
 
+static void macro_cv_assignments() {
+    struct Macro { int mode; bool decay, spread, metal, fold, noise, sweep, lpf; };
+    const Macro macros[] = {
+        {RivetDSP::CV_ATTACK, false, false, true,  false, true,  true,  false},
+        {RivetDSP::CV_IMPACT, true,  false, false, true,  false, true,  false},
+        {RivetDSP::CV_RATTLE, false, true,  true,  false, true,  false, false},
+        {RivetDSP::CV_CRUNCH, false, false, true,  true,  false, false, true },
+        {RivetDSP::CV_AIR,    false, false, false, true,  true,  false, true },
+        {RivetDSP::CV_BODY,   true,  true,  false, true,  false, false, false},
+    };
+    for (const Macro &macro : macros) {
+        for (int cv : {-1536, 3072}) {
+            RivetDSP combined, reference;
+            combined.settings = {20, 20, 20, 20, 20, 20, 20, 20};
+            reference.settings = combined.settings;
+            const int fine = cv / 192;
+            const int coarse = cv / 96;
+            if (macro.decay) reference.settings.decay += coarse;
+            if (macro.spread) reference.settings.spread += coarse;
+            if (macro.metal) reference.settings.metal += fine;
+            if (macro.fold) reference.settings.fold += fine;
+            if (macro.noise) reference.settings.noise += fine;
+            if (macro.sweep) reference.settings.sweep += coarse;
+            if (macro.lpf) reference.settings.cutoff += coarse;
+            combined.SetModes(macro.mode, RivetDSP::CV_OFF);
+            combined.SetCV(cv, 0);
+            combined.UpdateControls();
+            reference.UpdateControls();
+            combined.Trigger(false);
+            reference.Trigger(false);
+            for (int i = 0; i < 4000; ++i) {
+                int combined_env, reference_env;
+                assert(combined.Render(combined_env) == reference.Render(reference_env));
+                assert(combined_env == reference_env);
+            }
+        }
+    }
+}
+
 static void low_pass_range() {
     uint64_t energy[2] = {};
     for (int mode = 0; mode < 2; ++mode) {
@@ -215,8 +254,8 @@ static void randomize_control() {
     const uint64_t randomized = applet.OnDataRequest();
     assert(randomized != original);
     assert(Unpack(randomized, PackLocation{42, 6}) == 47);
-    assert(Unpack(randomized, PackLocation{48, 4}) == RivetDSP::CV_PITCH);
-    assert(Unpack(randomized, PackLocation{52, 4}) == RivetDSP::CV_TIMBRE);
+    assert(Unpack(randomized, PackLocation{48, 5}) == RivetDSP::CV_PITCH);
+    assert(Unpack(randomized, PackLocation{53, 5}) == RivetDSP::CV_TIMBRE);
     for (int i = 0; i < 8; ++i)
         assert(Unpack(randomized, PackLocation{i * 6, 6}) <= 63);
     Rivet restored;
@@ -225,8 +264,9 @@ static void randomize_control() {
     assert(restored.OnDataRequest() == randomized);
     restored.OnDataReceive(randomized & ((uint64_t(1) << 42) - 1));
     assert(Unpack(restored.OnDataRequest(), PackLocation{42, 6}) == 20);
-    assert(Unpack(restored.OnDataRequest(), PackLocation{48, 4}) == RivetDSP::CV_PITCH);
-    assert(Unpack(restored.OnDataRequest(), PackLocation{52, 4}) == RivetDSP::CV_TIMBRE);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{48, 5}) == RivetDSP::CV_PITCH);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{53, 5}) == RivetDSP::CV_TIMBRE);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{61, 1}) == 1);
     assert(Unpack(restored.OnDataRequest(), PackLocation{62, 1}) == 1);
     assert(Unpack(restored.OnDataRequest(), PackLocation{63, 1}) == 1);
     applet.OnButtonPress();
@@ -246,34 +286,50 @@ static void cv_mode_persistence() {
     applet.OnEncoderMove(4); // Timbre -> Decay
     applet.OnButtonPress();
     const uint64_t saved = applet.OnDataRequest();
-    assert(Unpack(saved, PackLocation{48, 4}) == RivetDSP::CV_FOLD);
-    assert(Unpack(saved, PackLocation{52, 4}) == RivetDSP::CV_DECAY);
+    assert(Unpack(saved, PackLocation{48, 5}) == RivetDSP::CV_FOLD);
+    assert(Unpack(saved, PackLocation{53, 5}) == RivetDSP::CV_DECAY);
     Rivet restored;
     restored.Start();
     restored.OnDataReceive(saved);
     assert(restored.OnDataRequest() == saved);
     applet.OnEncoderMove(1); // RANDOM after CV2
     applet.OnButtonPress();
-    assert(Unpack(applet.OnDataRequest(), PackLocation{48, 4}) == RivetDSP::CV_FOLD);
-    assert(Unpack(applet.OnDataRequest(), PackLocation{52, 4}) == RivetDSP::CV_DECAY);
+    assert(Unpack(applet.OnDataRequest(), PackLocation{48, 5}) == RivetDSP::CV_FOLD);
+    assert(Unpack(applet.OnDataRequest(), PackLocation{53, 5}) == RivetDSP::CV_DECAY);
     // Prior preset format has no assignment marker and restores defaults.
-    uint64_t old_preset = saved & ~(uint64_t(1) << 62);
+    uint64_t old_preset = saved & ~((uint64_t(1) << 61) | (uint64_t(1) << 62));
     old_preset = (old_preset & ~(uint64_t(63) << 42)) | (uint64_t(47) << 42);
     restored.OnDataReceive(old_preset);
-    assert(Unpack(restored.OnDataRequest(), PackLocation{48, 4}) == RivetDSP::CV_PITCH);
-    assert(Unpack(restored.OnDataRequest(), PackLocation{52, 4}) == RivetDSP::CV_TIMBRE);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{48, 5}) == RivetDSP::CV_PITCH);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{53, 5}) == RivetDSP::CV_TIMBRE);
     assert(Unpack(restored.OnDataRequest(), PackLocation{42, 6}) == 47);
 
     Rivet paired;
     paired.Start();
     paired.OnEncoderMove(8); // CV1
     paired.OnButtonPress();
-    paired.OnEncoderMove(14); // Pitch -> F+LPF, highest 4-bit mode
+    paired.OnEncoderMove(14); // Pitch -> F+LPF, highest old-format mode
     paired.OnButtonPress();
     const uint64_t paired_saved = paired.OnDataRequest();
-    assert(Unpack(paired_saved, PackLocation{48, 4}) == RivetDSP::CV_FOLD_LPF);
+    assert(Unpack(paired_saved, PackLocation{48, 5}) == RivetDSP::CV_FOLD_LPF);
     restored.OnDataReceive(paired_saved);
     assert(restored.OnDataRequest() == paired_saved);
+
+    uint64_t four_bit_preset = paired_saved;
+    four_bit_preset &= ~((uint64_t(1) << 61) | (uint64_t(1023) << 48));
+    Pack(four_bit_preset, PackLocation{48, 4}, RivetDSP::CV_FOLD_LPF);
+    Pack(four_bit_preset, PackLocation{52, 4}, RivetDSP::CV_LPF);
+    restored.OnDataReceive(four_bit_preset);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{48, 5}) == RivetDSP::CV_FOLD_LPF);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{53, 5}) == RivetDSP::CV_LPF);
+
+    paired.OnButtonPress(); // edit CV1 again
+    paired.OnEncoderMove(RivetDSP::CV_BODY - RivetDSP::CV_FOLD_LPF);
+    paired.OnButtonPress();
+    const uint64_t macro_saved = paired.OnDataRequest();
+    assert(Unpack(macro_saved, PackLocation{48, 5}) == RivetDSP::CV_BODY);
+    restored.OnDataReceive(macro_saved);
+    assert(restored.OnDataRequest() == macro_saved);
 }
 
 int main() {
@@ -281,6 +337,7 @@ int main() {
     pitch_tracking();
     cv_assignments();
     paired_cv_assignments();
+    macro_cv_assignments();
     low_pass_range();
     retrigger_and_persistence();
     randomize_control();

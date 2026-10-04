@@ -33,7 +33,18 @@ Turn the encoder to select a parameter. Press to edit; turn to change its value;
 | Sweep | Fast pitch-envelope amount |
 | LPF | Post-fold low-pass cutoff, dark to bright; 20 matches the earlier fixed filter |
 
-Each CV input can be set to **Off**, **1V/oct**, **Timbre**, **Metal**, **Fold**, **Noise**, **Decay**, **Spread**, **Sweep**, or **LPF**. Timbre is the original Metal+Fold+Noise level macro, with Noise receiving half the modulation depth. The single-parameter options target only the named control. The CV value adds to the panel setting and clips at its valid range. You can assign both inputs to the same target, in which case their modulation adds. 1V/oct tracks pitch continuously (subject to the engine's pitch limits); positive CV raises the other targets and negative CV lowers them. Decay and Noise burst length update on the next hit, while the other timbres respond during a hit. LPF's knob remains its base cutoff even when CV modulates it.
+Each CV input can be set independently to **Off**, **1V/oct**, a named macro, a paired combination, or a single parameter. **1V/oct** tracks pitch continuously (subject to the engine's pitch limits). The existing **Timbre** macro moves Metal, Fold and Noise together; Noise receives half the modulation depth and its burst length stays fixed. The new macros offer broader three-parameter movements:
+
+| On screen | CV controls | Suggested use |
+| --- | --- | --- |
+| Attack | Noise + Sweep + Metal | Sharper, noisier zaps |
+| Impact | Decay + Sweep + Fold | Heavier hits and kicks |
+| Rattle | Spread + Metal + Noise | Clanging, irregular attacks |
+| Crunch | Fold + Metal + LPF | Bright distorted hits |
+| Air | Noise + Fold + LPF | Airy-to-bristling attacks |
+| Body | Decay + Spread + Fold | Longer, denser body |
+
+The CV value adds to each destination's panel setting and clips at its valid range. Positive CV raises the named controls; negative CV lowers them. Both inputs may address the same destination and their modulation adds. Decay and Noise burst length update on the next hit; other timbres respond during a hit. LPF's knob remains its base cutoff even when CV modulates it.
 
 The paired options give one CV several destinations at once, using the same modulation depths as the individual options:
 
@@ -46,7 +57,7 @@ The paired options give one CV several destinations at once, using the same modu
 | Sp+M | Spread + Metal |
 | F+LPF | Fold + LPF |
 
-Useful pairs include **1V/oct + Timbre** (default), **1V/oct + Fold** for pitched distortion, **1V/oct + Decay** for pitched short/long hits, **Metal + Fold** for metallic sweeps, and **Noise + Sweep** for attacks and zaps. Older Rivet presets load with the default 1V/oct + Timbre assignments.
+The individual **Metal**, **Fold**, **Noise**, **Decay**, **Spread**, **Sweep**, and **LPF** targets remain selectable for now, as do the paired options above. This preserves access to existing sounds while the macro set is evaluated; their preset IDs remain stable so a later, shorter CV menu can still restore old presets. Useful assignments include **1V/oct + Timbre** (default), **1V/oct + Impact** for pitched kicks, **1V/oct + Attack** for zaps, and **LPF + Crunch** for two-dimensional sweeps. Older Rivet presets retain their CV assignments; presets from before CV assignment was added load with the default 1V/oct + Timbre pair.
 
 Settings are stored with the Hemisphere preset. The active voice is monophonic: a new trigger fades the previous audio over about 1 ms, then restarts the hit. An accent raises the new hit's output level by 25%; simultaneous triggers produce one accented hit. CV changes are read about once per millisecond. The final envelope starts with a short ramp to reduce clicks.
 

@@ -12,9 +12,11 @@ public:
         CV_OFF, CV_PITCH, CV_TIMBRE, CV_METAL, CV_FOLD,
         CV_NOISE, CV_DECAY, CV_SPREAD, CV_SWEEP, CV_LPF,
         CV_METAL_FOLD, CV_FOLD_NOISE, CV_NOISE_DECAY,
-        CV_DECAY_SWEEP, CV_SPREAD_METAL, CV_FOLD_LPF, CV_TARGET_COUNT
+        CV_DECAY_SWEEP, CV_SPREAD_METAL, CV_FOLD_LPF,
+        CV_ATTACK, CV_IMPACT, CV_RATTLE, CV_CRUNCH,
+        CV_AIR, CV_BODY, CV_TARGET_COUNT
     };
-    static_assert(CV_TARGET_COUNT <= 16, "CV target must fit preset's 4-bit field");
+    static_assert(CV_TARGET_COUNT <= 32, "CV target must fit preset's 5-bit field");
     struct Settings {
         uint8_t pitch = 20, decay = 35, spread = 26, metal = 24;
         uint8_t fold = 20, noise = 14, sweep = 28, cutoff = 20;
@@ -73,6 +75,24 @@ public:
                 spread_cv += cv / 96; metal_cv += cv / 48; break;
             case CV_FOLD_LPF:
                 fold_cv += cv / 48; lpf_cv += cv / 96; break;
+            case CV_ATTACK:
+                noise_cv += cv / 48; sweep_cv += cv / 96;
+                metal_cv += cv / 48; break;
+            case CV_IMPACT:
+                decay_cv += cv / 96; sweep_cv += cv / 96;
+                fold_cv += cv / 48; break;
+            case CV_RATTLE:
+                spread_cv += cv / 96; metal_cv += cv / 48;
+                noise_cv += cv / 48; break;
+            case CV_CRUNCH:
+                fold_cv += cv / 48; metal_cv += cv / 48;
+                lpf_cv += cv / 96; break;
+            case CV_AIR:
+                noise_cv += cv / 48; fold_cv += cv / 48;
+                lpf_cv += cv / 96; break;
+            case CV_BODY:
+                decay_cv += cv / 96; spread_cv += cv / 96;
+                fold_cv += cv / 48; break;
             default: break;
             }
         }

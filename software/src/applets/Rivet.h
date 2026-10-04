@@ -83,8 +83,9 @@ public:
         uint64_t data = 0;
         for (int i = 0; i < 8; ++i)
             Pack(data, PackLocation{(uint8_t)(i * 6), 6}, parameter(i));
-        Pack(data, PackLocation{48, 4}, cv_mode_[0]);
-        Pack(data, PackLocation{52, 4}, cv_mode_[1]);
+        Pack(data, PackLocation{48, 5}, cv_mode_[0]);
+        Pack(data, PackLocation{53, 5}, cv_mode_[1]);
+        Pack(data, PackLocation{61, 1}, 1); // five-bit CV mode format
         Pack(data, PackLocation{62, 1}, 1); // CV-assignment format marker
         Pack(data, PackLocation{63, 1}, 1); // format marker for older presets
         return data;
@@ -95,11 +96,15 @@ public:
             parameter(i) = constrain(Unpack(data, PackLocation{(uint8_t)(i * 6), 6}), 0, 63);
         parameter(7) = Unpack(data, PackLocation{63, 1})
             ? Unpack(data, PackLocation{42, 6}) : 20;
-        if (Unpack(data, PackLocation{62, 1})) {
-            cv_mode_[0] = constrain(Unpack(data, PackLocation{48, 4}), 0,
+        if (Unpack(data, PackLocation{61, 1})) {
+            cv_mode_[0] = constrain(Unpack(data, PackLocation{48, 5}), 0,
                                     (int)RivetDSP::CV_TARGET_COUNT - 1);
-            cv_mode_[1] = constrain(Unpack(data, PackLocation{52, 4}), 0,
+            cv_mode_[1] = constrain(Unpack(data, PackLocation{53, 5}), 0,
                                     (int)RivetDSP::CV_TARGET_COUNT - 1);
+        } else if (Unpack(data, PackLocation{62, 1})) {
+            // Original CV assignment presets used adjacent four-bit fields.
+            cv_mode_[0] = Unpack(data, PackLocation{48, 4});
+            cv_mode_[1] = Unpack(data, PackLocation{52, 4});
         } else {
             cv_mode_[0] = RivetDSP::CV_PITCH;
             cv_mode_[1] = RivetDSP::CV_TIMBRE;
@@ -125,7 +130,8 @@ private:
         static const char* names[RivetDSP::CV_TARGET_COUNT] = {
             "Off", "1V/oct", "Timbre", "Metal", "Fold",
             "Noise", "Decay", "Spread", "Sweep", "LPF",
-            "M+F", "F+N", "N+D", "D+Sw", "Sp+M", "F+LPF"
+            "M+F", "F+N", "N+D", "D+Sw", "Sp+M", "F+LPF",
+            "Attack", "Impact", "Rattle", "Crunch", "Air", "Body"
         };
         return names[mode < RivetDSP::CV_TARGET_COUNT ? mode : 0];
     }
