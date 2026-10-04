@@ -1,11 +1,11 @@
 #pragma once
 
-#include "IronPulseDSP.h"
+#include "RivetDSP.h"
 
 // A compact, BIA-inspired percussion voice for ordinary T32 DAC outputs.
-class IronPulse : public HemisphereApplet {
+class Rivet : public HemisphereApplet {
 public:
-    const char* applet_name() { return "IronPulse"; }
+    const char* applet_name() { return "Rivet"; }
 
     void Start() {
         cursor_ = 0;
@@ -33,19 +33,35 @@ public:
         static const char* labels[7] = {
             "Pitch", "Decay", "Spread", "Metal", "Fold", "Noise", "Sweep"
         };
-        for (int i = 0; i < 7; ++i) {
-            const int y = 12 + i * 7;
-            gfxPrint(1, y, labels[i]);
-            gfxPrint(47, y, parameter(i));
+        // The last position scrolls one row to make room for RANDOM.
+        const int first = cursor_ == 7 ? 1 : 0;
+        for (int row = 0; row < 7; ++row) {
+            const int item = first + row;
+            const int y = 12 + row * 7;
+            if (item == 7) {
+                gfxPrint(1, y, "RANDOM");
+                gfxPrint(38, y, "PUSH");
+            } else {
+                gfxPrint(1, y, labels[item]);
+                gfxPrint(47, y, parameter(item));
+            }
         }
-        gfxCursor(0, 19 + cursor_ * 7, 63, 7);
+        gfxCursor(0, 19 + (cursor_ - first) * 7, 63, 7);
+    }
+
+    void OnButtonPress() {
+        if (cursor_ == 7) {
+            for (int i = 0; i < 7; ++i) parameter(i) = random(64);
+            dsp_.UpdateControls();
+        } else CursorToggle();
     }
 
     void OnEncoderMove(int direction) {
         if (!EditMode()) {
-            MoveCursor(cursor_, direction, 6);
+            MoveCursor(cursor_, direction, 7);
             return;
         }
+        if (cursor_ == 7) return;
         uint8_t &value = parameter(cursor_);
         value = constrain((int)value + direction, 0, 63);
         dsp_.UpdateControls();
@@ -72,8 +88,8 @@ protected:
         help[HELP_CV2] = "Timbre";
         help[HELP_OUT1] = "Audio";
         help[HELP_OUT2] = "Env";
-        help[HELP_EXTRA1] = "Press: edit";
-        help[HELP_EXTRA2] = "Turn: parameter";
+        help[HELP_EXTRA1] = "Press: edit/RND";
+        help[HELP_EXTRA2] = "Turn: select/value";
     }
 
 private:
@@ -89,7 +105,7 @@ private:
         }
     }
 
-    IronPulseDSP dsp_;
+    RivetDSP dsp_;
     int cursor_ = 0;
     uint8_t control_tick_ = 0;
 };

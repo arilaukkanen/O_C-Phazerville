@@ -21,7 +21,7 @@
 #include "applets/BootsNCat.h"
 #include "applets/Brancher.h"
 #include "applets/BugCrack.h"
-#include "applets/IronPulse.h"
+#include "applets/Rivet.h"
 #include "applets/Burst.h"
 #include "applets/Button.h"
 #include "applets/BitBeat.h"
@@ -201,7 +201,7 @@ AppletRegistry reg{
     DeclareApplet<Xfader>{33, 0x10},
 #ifdef T32_NIGHTWIRE
     DeclareApplet<TrigSeq16>{25, 0x06},
-    DeclareApplet<IronPulse>{100, 0x80},
+    DeclareApplet<Rivet>{100, 0x80},
 #endif
 #else
 #ifdef APPLETS_SEQUENCING

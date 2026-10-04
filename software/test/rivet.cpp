@@ -4,6 +4,12 @@
 #include <cstdlib>
 #include <initializer_list>
 
+long random(long bound) {
+    static uint32_t state = 0x23456789;
+    state = state * 1664525 + 1013904223;
+    return (state >> 16) % bound;
+}
+
 template<typename T> T constrain(T value, T lo, T hi) {
     return value < lo ? lo : value > hi ? hi : value;
 }
@@ -28,6 +34,7 @@ public:
     int In(int ch) { return inputs[ch]; }
     void Out(int ch, int cv) { outputs[ch] = cv; }
     bool EditMode() { return editing; }
+    void CursorToggle() { editing = !editing; }
     template<typename T> void MoveCursor(T &c, int d, int max) {
         c = constrain(c + d, 0, max);
     }
@@ -36,11 +43,11 @@ public:
     void gfxCursor(int, int, int, int) {}
 };
 
-#include "../src/applets/IronPulse.h"
+#include "../src/applets/Rivet.h"
 
 static void bounds_and_decay() {
     for (int level = 0; level <= 63; level += 63) {
-        IronPulseDSP dsp;
+        RivetDSP dsp;
         dsp.settings = {(uint8_t)level,(uint8_t)level,(uint8_t)level,
                         (uint8_t)level,(uint8_t)level,(uint8_t)level,(uint8_t)level};
         for (int cv : {-6144, 0, 6144}) {
@@ -48,7 +55,7 @@ static void bounds_and_decay() {
             dsp.UpdateControls();
             dsp.Trigger(true);
             bool heard = false;
-            for (int i = 0; i < 2 * (int)IronPulseDSP::kRate; ++i) {
+            for (int i = 0; i < 2 * (int)RivetDSP::kRate; ++i) {
                 int env = -1;
                 int sample = dsp.Render(env);
                 assert(sample >= -3072 && sample <= 3072);
@@ -62,7 +69,7 @@ static void bounds_and_decay() {
 }
 
 static void pitch_tracking() {
-    IronPulseDSP dsp;
+    RivetDSP dsp;
     dsp.SetCV(0, 0); dsp.UpdateControls();
     uint32_t root = dsp.BaseIncrement();
     dsp.SetCV(1536, 0); dsp.UpdateControls();
@@ -72,7 +79,7 @@ static void pitch_tracking() {
 }
 
 static void retrigger_and_persistence() {
-    IronPulse applet;
+    Rivet applet;
     applet.Start();
     applet.editing = true;
     applet.OnEncoderMove(11);
@@ -81,7 +88,7 @@ static void retrigger_and_persistence() {
     applet.editing = true;
     applet.OnEncoderMove(22);
     auto packed = applet.OnDataRequest();
-    IronPulse restored;
+    Rivet restored;
     restored.Start();
     restored.OnDataReceive(packed);
     assert(restored.OnDataRequest() == packed);
@@ -104,9 +111,34 @@ static void retrigger_and_persistence() {
     assert(restored.OnDataRequest() == packed);
 }
 
+static void randomize_control() {
+    Rivet applet;
+    applet.Start();
+    const uint64_t original = applet.OnDataRequest();
+    applet.OnButtonPress();
+    assert(applet.editing);
+    applet.OnButtonPress();
+    assert(!applet.editing);
+    applet.OnEncoderMove(7); // RANDOM follows Sweep
+    applet.View();
+    applet.OnButtonPress();
+    assert(!applet.editing);
+    const uint64_t randomized = applet.OnDataRequest();
+    assert(randomized != original);
+    for (int i = 0; i < 7; ++i)
+        assert(Unpack(randomized, PackLocation{i * 6, 6}) <= 63);
+    Rivet restored;
+    restored.Start();
+    restored.OnDataReceive(randomized);
+    assert(restored.OnDataRequest() == randomized);
+    applet.OnButtonPress();
+    assert(applet.OnDataRequest() != randomized);
+}
+
 int main() {
     bounds_and_decay();
     pitch_tracking();
     retrigger_and_persistence();
-    std::puts("IronPulse DSP and applet tests passed");
+    randomize_control();
+    std::puts("Rivet DSP and applet tests passed");
 }

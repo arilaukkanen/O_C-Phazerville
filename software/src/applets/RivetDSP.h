@@ -4,7 +4,7 @@
 
 // Fixed-point, mono percussion engine for the 16,666 Hz O_C core tick.
 // No allocation, floating point, or division in Render().
-class IronPulseDSP {
+class RivetDSP {
 public:
     static constexpr uint32_t kRate = 16666;
     static constexpr int kMax = 63;
