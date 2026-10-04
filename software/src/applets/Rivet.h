@@ -51,7 +51,7 @@ public:
 
     void OnButtonPress() {
         if (cursor_ == 8) {
-            for (int i = 0; i < 8; ++i) parameter(i) = random(64);
+            for (int i = 0; i < 7; ++i) parameter(i) = random(64);
             dsp_.UpdateControls();
         } else CursorToggle();
     }

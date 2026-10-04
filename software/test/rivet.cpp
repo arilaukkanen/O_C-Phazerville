@@ -132,17 +132,23 @@ static void retrigger_and_persistence() {
 static void randomize_control() {
     Rivet applet;
     applet.Start();
-    const uint64_t original = applet.OnDataRequest();
     applet.OnButtonPress();
     assert(applet.editing);
     applet.OnButtonPress();
     assert(!applet.editing);
-    applet.OnEncoderMove(8); // RANDOM follows LPF
+    applet.OnEncoderMove(7); // LPF
+    applet.OnButtonPress();
+    applet.OnEncoderMove(27); // LPF 20 -> 47
+    applet.OnButtonPress();
+    const uint64_t original = applet.OnDataRequest();
+    assert(Unpack(original, PackLocation{42, 6}) == 47);
+    applet.OnEncoderMove(1); // RANDOM follows LPF
     applet.View();
     applet.OnButtonPress();
     assert(!applet.editing);
     const uint64_t randomized = applet.OnDataRequest();
     assert(randomized != original);
+    assert(Unpack(randomized, PackLocation{42, 6}) == 47);
     for (int i = 0; i < 8; ++i)
         assert(Unpack(randomized, PackLocation{i * 6, 6}) <= 63);
     Rivet restored;
@@ -154,6 +160,7 @@ static void randomize_control() {
     assert(Unpack(restored.OnDataRequest(), PackLocation{63, 1}) == 1);
     applet.OnButtonPress();
     assert(applet.OnDataRequest() != randomized);
+    assert(Unpack(applet.OnDataRequest(), PackLocation{42, 6}) == 47);
 }
 
 int main() {

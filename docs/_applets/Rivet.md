@@ -20,7 +20,7 @@ The logical inputs follow Hemisphere's current Input Mapping. On the left half, 
 
 ### Controls
 
-Turn the encoder to select a parameter. Press to edit; turn to change its 0–63 value; press again to leave editing. **LPF** controls the low-pass filter after the wavefolder: low values make darker, rounder hits; high values let more metallic brightness through. After LPF, turn once more to **RANDOM** and press to generate a new set of eight sound parameters. The new sound is heard on the next hit and can still be edited normally. The list scrolls when selecting LPF or RANDOM.
+Turn the encoder to select a parameter. Press to edit; turn to change its 0–63 value; press again to leave editing. **LPF** controls the low-pass filter after the wavefolder: low values make darker, rounder hits; high values let more metallic brightness through. After LPF, turn once more to **RANDOM** and press to randomize the other seven sound parameters. LPF stays at its chosen value. The new sound is heard on the next hit and can still be edited normally. The list scrolls when selecting LPF or RANDOM.
 
 | Parameter | Effect |
 | --- | --- |
