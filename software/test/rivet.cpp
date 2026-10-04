@@ -49,7 +49,8 @@ static void bounds_and_decay() {
     for (int level = 0; level <= 63; level += 63) {
         RivetDSP dsp;
         dsp.settings = {(uint8_t)level,(uint8_t)level,(uint8_t)level,
-                        (uint8_t)level,(uint8_t)level,(uint8_t)level,(uint8_t)level};
+                        (uint8_t)level,(uint8_t)level,(uint8_t)level,(uint8_t)level,
+                        (uint8_t)level};
         for (int cv : {-6144, 0, 6144}) {
             dsp.SetCV(cv, cv);
             dsp.UpdateControls();
@@ -76,6 +77,23 @@ static void pitch_tracking() {
     uint32_t octave = dsp.BaseIncrement();
     assert(octave > 2 * root - root / 1000);
     assert(octave < 2 * root + root / 1000);
+}
+
+static void low_pass_range() {
+    uint64_t energy[2] = {};
+    for (int mode = 0; mode < 2; ++mode) {
+        RivetDSP dsp;
+        dsp.settings = {54, 40, 50, 0, 0, 0, 0,
+                        (uint8_t)(mode ? 63 : 0)};
+        dsp.UpdateControls();
+        dsp.Trigger(false);
+        for (int i = 0; i < 5000; ++i) {
+            int env;
+            int32_t sample = dsp.Render(env);
+            energy[mode] += (int64_t)sample * sample;
+        }
+    }
+    assert(energy[1] > energy[0] * 2);
 }
 
 static void retrigger_and_persistence() {
@@ -119,18 +137,21 @@ static void randomize_control() {
     assert(applet.editing);
     applet.OnButtonPress();
     assert(!applet.editing);
-    applet.OnEncoderMove(7); // RANDOM follows Sweep
+    applet.OnEncoderMove(8); // RANDOM follows LPF
     applet.View();
     applet.OnButtonPress();
     assert(!applet.editing);
     const uint64_t randomized = applet.OnDataRequest();
     assert(randomized != original);
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 8; ++i)
         assert(Unpack(randomized, PackLocation{i * 6, 6}) <= 63);
     Rivet restored;
     restored.Start();
     restored.OnDataReceive(randomized);
     assert(restored.OnDataRequest() == randomized);
+    restored.OnDataReceive(randomized & ((uint64_t(1) << 42) - 1));
+    assert(Unpack(restored.OnDataRequest(), PackLocation{42, 6}) == 20);
+    assert(Unpack(restored.OnDataRequest(), PackLocation{63, 1}) == 1);
     applet.OnButtonPress();
     assert(applet.OnDataRequest() != randomized);
 }
@@ -138,6 +159,7 @@ static void randomize_control() {
 int main() {
     bounds_and_decay();
     pitch_tracking();
+    low_pass_range();
     retrigger_and_persistence();
     randomize_control();
     std::puts("Rivet DSP and applet tests passed");

@@ -41,10 +41,10 @@ int main(int argc, char **argv) {
     char path[512];
     const char *names[] = {"kick", "metal", "noise", "timbre_sweep"};
     RivetDSP::Settings settings[] = {
-        {8,34,3,4,12,3,55},
-        {28,27,52,58,51,10,22},
-        {25,16,38,35,35,60,22},
-        {21,28,34,25,24,20,28}
+        {8,34,3,4,12,3,55,20},
+        {28,27,52,58,51,10,22,40},
+        {25,16,38,35,35,60,22,28},
+        {21,28,34,25,24,20,28,20}
     };
     for (int i = 0; i < 4; ++i) {
         snprintf(path, sizeof(path), "%s/%s.wav", argv[1], names[i]);

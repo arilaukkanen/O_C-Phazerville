@@ -10,7 +10,7 @@ public:
     static constexpr int kMax = 63;
     struct Settings {
         uint8_t pitch = 20, decay = 35, spread = 26, metal = 24;
-        uint8_t fold = 20, noise = 14, sweep = 28;
+        uint8_t fold = 20, noise = 14, sweep = 28, cutoff = 20;
     } settings;
 
     void Trigger(bool accent) {
@@ -42,6 +42,8 @@ public:
         metal_ = clamp(settings.metal * 4 + macro, 0, 252);
         fold_ = clamp(settings.fold * 4 + macro, 0, 252);
         noise_ = clamp(settings.noise * 4 + macro / 2, 0, 252);
+        // 20 preserves the original one-pole coefficient of 64/256.
+        filter_coeff_ = 4 + settings.cutoff * 3;
 
         // Linear interpolation within an octave gives continuous 1 V/oct.
         int cv = pitch_cv_;
@@ -119,8 +121,8 @@ public:
         }
         if (signal > 16384) signal = 16384;
         if (signal < -16384) signal = -16384;
-        // Gentle post-fold low-pass attenuates the highest aliased products.
-        filter_ += (signal - filter_) >> 2;
+        // Adjustable post-fold low-pass. Coefficient is cached at control rate.
+        filter_ += ((signal - filter_) * filter_coeff_) >> 8;
         int32_t out = filter_ * master_ / 32768;
         if (accent_) out = out * 5 / 4;
         out = out * 3072 / 16384; // +/-2 V maximum in O_C pitch units
@@ -204,7 +206,7 @@ private:
     int32_t noise_lp_ = 0, filter_ = 0;
     int32_t last_audio_ = 0, last_env_ = 0;
     int pitch_cv_ = 0, timbre_cv_ = 0;
-    int metal_ = 0, fold_ = 0, noise_ = 0;
+    int metal_ = 0, fold_ = 0, noise_ = 0, filter_coeff_ = 64;
     uint8_t fade_ = 0, attack_ = 0;
     bool pending_accent_ = false, accent_ = false;
 };

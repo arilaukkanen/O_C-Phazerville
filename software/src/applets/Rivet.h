@@ -30,15 +30,15 @@ public:
     }
 
     void View() {
-        static const char* labels[7] = {
-            "Pitch", "Decay", "Spread", "Metal", "Fold", "Noise", "Sweep"
+        static const char* labels[8] = {
+            "Pitch", "Decay", "Spread", "Metal", "Fold", "Noise", "Sweep", "LPF"
         };
-        // The last position scrolls one row to make room for RANDOM.
-        const int first = cursor_ == 7 ? 1 : 0;
+        // Scroll only when the selected item is below the seventh row.
+        const int first = cursor_ > 6 ? cursor_ - 6 : 0;
         for (int row = 0; row < 7; ++row) {
             const int item = first + row;
             const int y = 12 + row * 7;
-            if (item == 7) {
+            if (item == 8) {
                 gfxPrint(1, y, "RANDOM");
                 gfxPrint(38, y, "PUSH");
             } else {
@@ -50,18 +50,18 @@ public:
     }
 
     void OnButtonPress() {
-        if (cursor_ == 7) {
-            for (int i = 0; i < 7; ++i) parameter(i) = random(64);
+        if (cursor_ == 8) {
+            for (int i = 0; i < 8; ++i) parameter(i) = random(64);
             dsp_.UpdateControls();
         } else CursorToggle();
     }
 
     void OnEncoderMove(int direction) {
         if (!EditMode()) {
-            MoveCursor(cursor_, direction, 7);
+            MoveCursor(cursor_, direction, 8);
             return;
         }
-        if (cursor_ == 7) return;
+        if (cursor_ == 8) return;
         uint8_t &value = parameter(cursor_);
         value = constrain((int)value + direction, 0, 63);
         dsp_.UpdateControls();
@@ -69,14 +69,17 @@ public:
 
     uint64_t OnDataRequest() {
         uint64_t data = 0;
-        for (int i = 0; i < 7; ++i)
+        for (int i = 0; i < 8; ++i)
             Pack(data, PackLocation{(uint8_t)(i * 6), 6}, parameter(i));
+        Pack(data, PackLocation{63, 1}, 1); // format marker for older presets
         return data;
     }
 
     void OnDataReceive(uint64_t data) {
         for (int i = 0; i < 7; ++i)
             parameter(i) = constrain(Unpack(data, PackLocation{(uint8_t)(i * 6), 6}), 0, 63);
+        parameter(7) = Unpack(data, PackLocation{63, 1})
+            ? Unpack(data, PackLocation{42, 6}) : 20;
         dsp_.UpdateControls();
     }
 
@@ -101,7 +104,8 @@ private:
         case 3: return dsp_.settings.metal;
         case 4: return dsp_.settings.fold;
         case 5: return dsp_.settings.noise;
-        default: return dsp_.settings.sweep;
+        case 6: return dsp_.settings.sweep;
+        default: return dsp_.settings.cutoff;
         }
     }
 

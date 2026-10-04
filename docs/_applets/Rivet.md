@@ -20,7 +20,7 @@ The logical inputs follow Hemisphere's current Input Mapping. On the left half, 
 
 ### Controls
 
-Turn the encoder to select a parameter. Press to edit; turn to change its 0–63 value; press again to leave editing. After Sweep, turn once more to **RANDOM** and press to generate a new set of seven sound parameters. The new sound is heard on the next hit and can still be edited normally. When RANDOM is selected, the top Pitch row scrolls out to make room for the action.
+Turn the encoder to select a parameter. Press to edit; turn to change its 0–63 value; press again to leave editing. **LPF** controls the low-pass filter after the wavefolder: low values make darker, rounder hits; high values let more metallic brightness through. After LPF, turn once more to **RANDOM** and press to generate a new set of eight sound parameters. The new sound is heard on the next hit and can still be edited normally. The list scrolls when selecting LPF or RANDOM.
 
 | Parameter | Effect |
 | --- | --- |
@@ -31,16 +31,17 @@ Turn the encoder to select a parameter. Press to edit; turn to change its 0–63
 | Fold | Symmetric wavefold drive |
 | Noise | Level and length of the noisy attack |
 | Sweep | Fast pitch-envelope amount |
+| LPF | Post-fold low-pass cutoff, dark to bright; 20 matches the earlier fixed filter |
 
 Settings are stored with the Hemisphere preset. The active voice is monophonic: a new trigger fades the previous audio over about 1 ms, then restarts the hit. An accent raises the new hit's output level by 25%; simultaneous triggers produce one accented hit. CV changes are read about once per millisecond. The final envelope starts with a short ramp to reduce clicks.
 
 ### Starting patches
 
-| Sound | Pitch | Decay | Spread | Metal | Fold | Noise | Sweep |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Distorted kick | 8 | 34 | 3 | 4 | 12 | 3 | 55 |
-| Metallic hit | 28 | 27 | 52 | 58 | 51 | 10 | 22 |
-| Noisy attack | 25 | 16 | 38 | 35 | 35 | 60 | 22 |
+| Sound | Pitch | Decay | Spread | Metal | Fold | Noise | Sweep | LPF |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Distorted kick | 8 | 34 | 3 | 4 | 12 | 3 | 55 | 20 |
+| Metallic hit | 28 | 27 | 52 | 58 | 51 | 10 | 22 | 40 |
+| Noisy attack | 25 | 16 | 38 | 35 | 35 | 60 | 22 | 28 |
 
 The offline WAV previews in `software/previews/rivet/` use the same DSP source, but do not model the O_C DAC, output calibration, analog filtering or downstream gain. Listen on the module before judging the final sound.
 
