@@ -180,6 +180,7 @@ public:
         for (int i = 0; i < 6; ++i) {
             if (signal > 16384) signal = 32768 - signal;
             else if (signal < -16384) signal = -32768 - signal;
+            else break;
         }
         if (signal > 16384) signal = 16384;
         if (signal < -16384) signal = -16384;
@@ -222,23 +223,23 @@ private:
         int fraction = index & 7;
         return table[segment] + ((int32_t)(table[segment+1] - table[segment]) * fraction >> 3);
     }
-    static int32_t point(uint8_t i) {
-        static const int16_t quarter[17] = {
-            0,1606,3196,4756,6270,7723,9102,10394,11585,
-            12665,13623,14449,15137,15679,16069,16305,16384
-        };
-        i &= 63;
-        uint8_t quadrant = i >> 4, pos = i & 15;
-        if (quadrant == 0) return quarter[pos];
-        if (quadrant == 1) return quarter[16-pos];
-        if (quadrant == 2) return -quarter[pos];
-        return -quarter[16-pos];
-    }
     static int32_t sine(uint32_t phase) {
+        // Full cycle avoids six quadrant decisions for the three oscillators.
+        // The final zero allows index + 1 at the wrap point.
+        static const int16_t wave[65] = {
+            0,1606,3196,4756,6270,7723,9102,10394,
+            11585,12665,13623,14449,15137,15679,16069,16305,
+            16384,16305,16069,15679,15137,14449,13623,12665,
+            11585,10394,9102,7723,6270,4756,3196,1606,
+            0,-1606,-3196,-4756,-6270,-7723,-9102,-10394,
+            -11585,-12665,-13623,-14449,-15137,-15679,-16069,-16305,
+            -16384,-16305,-16069,-15679,-15137,-14449,-13623,-12665,
+            -11585,-10394,-9102,-7723,-6270,-4756,-3196,-1606,0
+        };
         uint8_t index = phase >> 26;
         uint16_t fraction = (phase >> 16) & 1023;
-        int32_t a = point(index);
-        return a + ((point(index + 1) - a) * fraction >> 10);
+        int32_t a = wave[index];
+        return a + ((wave[index + 1] - a) * fraction >> 10);
     }
     static int32_t step_for_ms(int ms) {
         int32_t step = (32767 * 1000L) / (ms * (int32_t)kRate);
